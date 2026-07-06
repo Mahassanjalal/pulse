@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>About Pulse | Global Discovery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-container": "#4c005b",
+                    "inverse-surface": "#e5e2e3",
+                    "surface": "#131314",
+                    "primary-fixed-dim": "#f7acff",
+                    "outline-variant": "#534153",
+                    "surface-container": "#201f20",
+                    "secondary-container": "#00eefc",
+                    "on-tertiary": "#053900",
+                    "surface-container-low": "#1c1b1c",
+                    "tertiary-fixed-dim": "#2ae500",
+                    "tertiary": "#2ae500",
+                    "error": "#ffb4ab",
+                    "primary-container": "#e14aff",
+                    "surface-variant": "#353436",
+                    "surface-bright": "#3a393a",
+                    "secondary": "#d3fbff",
+                    "on-tertiary-fixed": "#022100",
+                    "on-secondary-fixed-variant": "#004f54",
+                    "on-background": "#e5e2e3",
+                    "on-tertiary-fixed-variant": "#095300",
+                    "inverse-primary": "#a100be",
+                    "tertiary-fixed": "#79ff5b",
+                    "on-primary-fixed": "#350040",
+                    "on-tertiary-container": "#043200",
+                    "tertiary-container": "#1da800",
+                    "surface-container-high": "#2a2a2b",
+                    "on-primary-fixed-variant": "#7b0091",
+                    "inverse-on-surface": "#313031",
+                    "on-surface": "#e5e2e3",
+                    "surface-dim": "#131314",
+                    "secondary-fixed": "#7df4ff",
+                    "on-error-container": "#ffdad6",
+                    "on-primary": "#570067",
+                    "on-surface-variant": "#d8bfd6",
+                    "on-error": "#690005",
+                    "on-secondary": "#00363a",
+                    "secondary-fixed-dim": "#00dbe9",
+                    "background": "#131314",
+                    "surface-container-lowest": "#0e0e0f",
+                    "on-secondary-fixed": "#002022",
+                    "outline": "#a08a9f",
+                    "surface-tint": "#f7acff",
+                    "surface-container-highest": "#353436",
+                    "primary-fixed": "#ffd6ff",
+                    "error-container": "#93000a",
+                    "primary": "#f7acff",
+                    "on-secondary-container": "#00686f"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "24px",
+                    "container-max": "1440px",
+                    "xs": "4px",
+                    "md": "16px",
+                    "unit": "4px",
+                    "gutter": "20px",
+                    "xl": "40px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "display-lg": ["Montserrat"],
+                    "label-sm": ["Inter"],
+                    "headline-lg": ["Montserrat"],
+                    "label-md": ["Inter"],
+                    "headline-lg-mobile": ["Montserrat"],
+                    "headline-md": ["Montserrat"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "body-lg": ["18px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "label-sm": ["12px", {"lineHeight": "1", "fontWeight": "500"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "label-md": ["14px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0A0A0B;
+            color: #e5e2e3;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+        .glass-panel {
+            background: rgba(26, 26, 30, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-glow-purple:hover {
+            box-shadow: 0px 0px 20px #D800FF;
+        }
+        .neon-glow-cyan {
+            box-shadow: 0px 0px 12px rgba(0, 238, 252, 0.4);
+        }
+        .parallax-bg {
+            background-attachment: fixed;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+        .horizontal-scroll-container {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none;
+        }
+        .horizontal-scroll-container::-webkit-scrollbar {
+            display: none;
+        }
+        .scroll-section {
+            min-width: 100vw;
+            scroll-snap-align: start;
+        }
+        .mask-gradient {
+            mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-0 z-50 flex items-center justify-between px-xl bg-surface/60 backdrop-blur-lg border-b border-white/10 w-full h-20">
+<div class="flex items-center gap-md">
+<h1 class="font-display-lg text-headline-md font-black text-primary tracking-tighter">Pulse</h1>
+<nav class="hidden md:flex items-center gap-lg ml-xl">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" href="#">Discover</a>
+<a class="font-label-md text-label-md text-primary border-b-2 border-primary pb-1" href="#">About Us</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" href="#">Premium</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" href="#">Support</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<div class="hidden md:flex items-center gap-sm mr-md">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer active:opacity-80 hover:text-primary transition-all">settings</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer active:opacity-80 hover:text-primary transition-all">help</span>
+</div>
+<button class="bg-primary px-lg py-sm rounded-full font-label-md text-on-primary font-bold active:scale-95 transition-all neon-glow-purple">Go Live</button>
+</div>
+</header>
+<main class="pt-20">
+<!-- Hero Section: Connecting Strangers -->
+<section class="relative h-[921px] flex items-center justify-center overflow-hidden">
+
+<div class="relative z-10 text-center px-lg max-w-4xl">
+<span class="font-label-md text-secondary-fixed tracking-[0.2em] uppercase mb-md block">The Pulse Manifesto</span>
+<h2 class="font-display-lg text-display-lg text-white mb-lg">Connecting Strangers,<br/><span class="text-primary">Building Community.</span></h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">
+                    In a world of static profiles, Pulse brings back the magic of spontaneous face-to-face interaction. We're not just an app; we're a global bridge.
+                </p>
+<div class="mt-xl flex justify-center gap-md">
+<button class="bg-primary text-on-primary px-xl py-md rounded-xl font-headline-md neon-glow-purple transition-all transform active:scale-95">Our Story</button>
+<button class="glass-panel text-white px-xl py-md rounded-xl font-headline-md border border-white/20 transition-all hover:bg-white/10 active:scale-95">The Vision</button>
+</div>
+</div>
+<div class="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-50">
+<span class="material-symbols-outlined text-4xl">keyboard_double_arrow_down</span>
+</div>
+</section>
+<!-- Our Story: Parallax Scroll -->
+<section class="relative py-xl">
+<div class="container mx-auto px-xl">
+<div class="grid md:grid-cols-2 gap-xl items-center mb-40">
+<div class="space-y-lg order-2 md:order-1">
+<h3 class="font-headline-lg text-headline-lg text-primary">Born from Isolation</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                            Pulse began in a cramped studio apartment during the 2020 lockdowns. Our founder, tired of the curated perfection of social media feeds, wanted something raw, real, and immediate.
+                        </p>
+<p class="text-on-surface-variant leading-relaxed">
+                            We built a prototype that matched people for 3-minute video conversations. No likes, no comments—just human presence. The result was electric.
+                        </p>
+</div>
+<div class="relative order-1 md:order-2 group">
+<div class="absolute -inset-4 bg-primary/20 rounded-xl blur-2xl group-hover:bg-primary/30 transition-all"></div>
+<div class="aspect-square rounded-xl overflow-hidden glass-panel relative z-10">
+<div class="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110" data-alt="A moody cinematic photo of a developer in a dark room illuminated by multiple purple and cyan neon monitors, showing lines of code and glowing abstract node connections, representing the intense focus during the creation of Pulse." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDYEKX5t1MyBHpEyjSc3UjtIFQ7P940OJP3VOC_blXcmTWqzF91PPmzUADzboTvml1-6vC0MS7vQGCJg_6110IKiruTQ-0JgzpgBdSqoLVqncGXIWmeNoZYGFsBBknB1Z0WDYMsO4LNI0HUE4sb2AKrvBPV1HaEnbbjuqZ3sUR16SWMzSHE5uv5dwLEaNbZ2diHCRTB6Si00RJ4OtWkIUq01Hk11V2BP8iyG2KipCVkWH18sgf5T2-M_-X_GezeRh5CdKQevY4Ue7E')"></div>
+</div>
+</div>
+</div>
+<div class="grid md:grid-cols-2 gap-xl items-center">
+<div class="relative group">
+<div class="absolute -inset-4 bg-secondary-container/20 rounded-xl blur-2xl group-hover:bg-secondary-container/30 transition-all"></div>
+<div class="aspect-video rounded-xl overflow-hidden glass-panel relative z-10">
+<div class="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110" data-alt="A wide-angle landscape shot of a futuristic data center with glowing blue liquid cooling pipes and arrays of obsidian-black servers, symbolizing the global scale and technological foundation of the Pulse discovery network." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA7hVkYLR9VJCojzXjfROYrllcLiYXk8ayopliZV3ILHNoZ840d5XsNm-KfA5NV23Lm4VKQk1zYnlKYV3Lgv2gtCHbok9eXfSfiOVB8GKbbe2ZbwaGyEc9oufZOMnTE9dmvKsajFdei3QFERDSsTjLpi1ohGRI90JNHD3DfRIm99k5IxXT2QEK-T84YQ9kA4dw65zRk4MRYhPhw8nCDFTP3aSacdmpFTWW2Q0Pk46Q21PF-s2bkNyy8nTLWplgu5w08E_xdPGdswD0')"></div>
+</div>
+</div>
+<div class="space-y-lg">
+<h3 class="font-headline-lg text-headline-lg text-secondary-fixed">The Global Bridge</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                            Today, Pulse facilitates over 10 million connections daily. From a baker in Paris teaching a student in Tokyo how to knead dough, to musicians jamming across oceans—we are the engine of serendipity.
+                        </p>
+<div class="flex items-center gap-md pt-md">
+<div class="flex -space-x-4">
+<div class="w-12 h-12 rounded-full border-2 border-surface bg-cover" data-alt="Close up portrait of a young person with vibrant neon lighting, expressing joy and connection in a digital environment." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA-gb_JED1i63wGJ1pV6d3UDU_GHf6_t9amjL3QwjuzrxWIDWG38lGYXHQy0Now5b07xjhQ2f-Lh07O1OjnX74iLE-rHIloZ2kMfa5oYoE_PeEvWeG93TVvvMKnZir5JfWIj22j2AEN83lU6ngE_oqfTaeKbVU6nJicWvJBIdvOdNRjt14-eWYjCkaa57kWIXouIru4ld55qkwsUrcwi3Rgm8nv_regEyWx9ZVYJxumY3LDtqjTtCMw6NOnCyJZpclr6vQlDHzUXmk')"></div>
+<div class="w-12 h-12 rounded-full border-2 border-surface bg-cover" data-alt="Close up portrait of an elderly man smiling through a video call interface, representing cross-generational connection." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCj3eorSLr1iVDX5zeQagSfszUCgqFAky1H3XZkrF7po1PsNIyMg-YFQxrWsGBusLkB_M0DylBEiR0sczAnZahXfWWqUY5EpKyaCsST3aYHdpioZkQvKStNLXJJ4mkPU8IQQK2TIPSu5xcGEL2_P30-7wMW-IvmqfyHZPu_Mc2wmraXcc_CD0_fN_xvm86Szh12mGgrloA_VP7e0gsw1s1g7YfTmgoMcFiEXpt9CpUlMFLIB0hU3yEnJOYdWtKj7rs000mTQfYNe60')"></div>
+<div class="w-12 h-12 rounded-full border-2 border-surface bg-cover" data-alt="Close up portrait of a South Asian woman laughing, lit by the glow of a mobile phone screen in a dark room." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuChHbPwkoVwrgv8fZqAkmaSAWZy6XuAdVFrTbntuTcy7coIyxNm76QvRljCz1jLk8Ad9itFeXOF7uy3167to6KWCPRvLWIdqbVMOob3nSHkwowYLL9HjHwoHvZ452jjqswd3xHOzrn3EV_zIgaO2RMn-jdDcBA3a1ZwsFK-bbQNPzg9xmbdnzqV2YsFIVOi_OQcHqO7h_Y6Apecxij4KtqpKpL0dNlVLXOvfN2anTwteWLzHsS_t2_LRRzGwSucfATK4cvyJLsAM9I')"></div>
+</div>
+<span class="text-label-md font-semibold text-secondary-fixed">+10M Lives Touched</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Safety & Moderation: Interactive Bento Grid -->
+<section class="bg-surface-container-low py-xl">
+<div class="container mx-auto px-xl">
+<div class="mb-xl">
+<h2 class="font-headline-lg text-headline-lg text-center mb-sm">Safety by Design</h2>
+<p class="text-center text-on-surface-variant max-w-2xl mx-auto">Discovery is only fun when it's safe. We've built an invisible shield around every interaction.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-6 gap-md">
+<!-- AI Detection -->
+<div class="md:col-span-3 glass-panel p-xl rounded-xl flex flex-col justify-between group hover:border-primary/50 transition-all">
+<div>
+<div class="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-md">
+<span class="material-symbols-outlined text-primary">psychology</span>
+</div>
+<h4 class="font-headline-md text-white mb-sm">Real-time AI Moderation</h4>
+<p class="text-on-surface-variant">Our custom-trained neural networks scan video feeds at 30fps to detect and block inappropriate content before it ever reaches your screen. Latency: &lt; 100ms.</p>
+</div>
+<div class="mt-xl h-24 overflow-hidden rounded-lg bg-surface relative">
+
+</div>
+</div>
+<!-- Trust Score -->
+<div class="md:col-span-3 glass-panel p-xl rounded-xl group hover:border-secondary-fixed/50 transition-all">
+<div class="flex justify-between items-start mb-md">
+<div class="w-12 h-12 bg-secondary-container/20 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary-fixed">verified_user</span>
+</div>
+<div class="px-md py-xs bg-secondary-fixed/10 text-secondary-fixed rounded-full text-label-sm border border-secondary-fixed/30">
+                                ACTIVE SCORE
+                            </div>
+</div>
+<h4 class="font-headline-md text-white mb-sm">Dynamic Trust Score</h4>
+<p class="text-on-surface-variant mb-lg">Your reputation matters. Users with high Trust Scores gain access to premium discovery features and "Trusted Only" lobbies.</p>
+<div class="bg-surface-container-high rounded-xl p-md flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-label-sm text-on-surface-variant">Your Level</span>
+<span class="text-headline-md text-secondary-fixed font-bold">Guardian Gold</span>
+</div>
+<div class="w-16 h-16 rounded-full border-4 border-secondary-fixed border-t-transparent animate-spin"></div>
+</div>
+</div>
+<!-- Reporting -->
+<div class="md:col-span-2 glass-panel p-lg rounded-xl flex flex-col items-center text-center">
+<span class="material-symbols-outlined text-error text-4xl mb-sm">gavel</span>
+<h5 class="text-white font-bold mb-xs">Zero Tolerance</h5>
+<p class="text-label-md text-on-surface-variant">Verified reports lead to immediate, hardware-level bans. We play no games with harassment.</p>
+</div>
+<!-- Encryption -->
+<div class="md:col-span-2 glass-panel p-lg rounded-xl flex flex-col items-center text-center">
+<span class="material-symbols-outlined text-tertiary text-4xl mb-sm">lock</span>
+<h5 class="text-white font-bold mb-xs">P2P Encryption</h5>
+<p class="text-label-md text-on-surface-variant">All video streams are encrypted end-to-end. Pulse never stores your private video data.</p>
+</div>
+<!-- Community -->
+<div class="md:col-span-2 glass-panel p-lg rounded-xl flex flex-col items-center text-center">
+<span class="material-symbols-outlined text-primary text-4xl mb-sm">volunteer_activism</span>
+<h5 class="text-white font-bold mb-xs">24/7 Human Appeals</h5>
+<p class="text-label-md text-on-surface-variant">Our global moderation team is available around the clock to review complex cases.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Horizontal Scroll Section: Values -->
+<section class="bg-surface py-xl overflow-hidden">
+<div class="container mx-auto px-xl mb-xl flex items-center justify-between">
+<h2 class="font-headline-lg text-headline-lg">Our Core Values</h2>
+<div class="flex gap-sm">
+<button class="w-12 h-12 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 active:scale-90 transition-all" id="scroll-left"><span class="material-symbols-outlined">chevron_left</span></button>
+<button class="w-12 h-12 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 active:scale-90 transition-all" id="scroll-right"><span class="material-symbols-outlined">chevron_right</span></button>
+</div>
+</div>
+<div class="horizontal-scroll-container gap-lg px-xl pb-xl" id="values-scroll">
+<!-- Value 1 -->
+<div class="scroll-section w-[400px] shrink-0 glass-panel p-xl rounded-2xl border-l-4 border-l-primary">
+<span class="text-display-lg font-black text-primary/20 block mb-sm">01</span>
+<h4 class="font-headline-md text-white mb-md">Radical Spontaneity</h4>
+<p class="text-on-surface-variant">We believe the best moments in life aren't planned. Pulse is designed to foster the unexpected and the marvelous.</p>
+</div>
+<!-- Value 2 -->
+<div class="scroll-section w-[400px] shrink-0 glass-panel p-xl rounded-2xl border-l-4 border-l-secondary-fixed">
+<span class="text-display-lg font-black text-secondary-fixed/20 block mb-sm">02</span>
+<h4 class="font-headline-md text-white mb-md">Authentic Presence</h4>
+<p class="text-on-surface-variant">Profiles are masks. Video is reality. We prioritize seeing the person behind the text for genuine human connection.</p>
+</div>
+<!-- Value 3 -->
+<div class="scroll-section w-[400px] shrink-0 glass-panel p-xl rounded-2xl border-l-4 border-l-tertiary">
+<span class="text-display-lg font-black text-tertiary/20 block mb-sm">03</span>
+<h4 class="font-headline-md text-white mb-md">Global Empathy</h4>
+<p class="text-on-surface-variant">By connecting people from different cultures, we break down prejudices and build a more empathetic global society.</p>
+</div>
+<!-- Value 4 -->
+<div class="scroll-section w-[400px] shrink-0 glass-panel p-xl rounded-2xl border-l-4 border-l-error">
+<span class="text-display-lg font-black text-error/20 block mb-sm">04</span>
+<h4 class="font-headline-md text-white mb-md">Digital Sanctuary</h4>
+<p class="text-on-surface-variant">The internet can be loud. Pulse is a focused sanctuary for 1-on-1 interaction without the noise of algorithms.</p>
+</div>
+</div>
+</section>
+<!-- Team Section: Neon Headshots -->
+<section class="py-xl relative">
+<div class="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent"></div>
+<div class="container mx-auto px-xl relative z-10">
+<div class="text-center mb-xl">
+<h2 class="font-headline-lg text-headline-lg mb-sm">The Architects of Connection</h2>
+<p class="text-on-surface-variant">A remote-first team spread across 14 timezones, united by one pulse.</p>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-lg">
+<!-- Team Member 1 -->
+<div class="group text-center">
+<div class="relative mb-md inline-block">
+<div class="absolute -inset-1 bg-gradient-to-tr from-primary to-secondary-container rounded-2xl opacity-0 group-hover:opacity-100 blur-md transition-all duration-500"></div>
+<div class="relative w-40 h-40 md:w-56 md:h-56 rounded-2xl overflow-hidden glass-panel border-2 border-white/5">
+<div class="w-full h-full bg-cover bg-center grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Stylized neon-tinted headshot of a female tech executive, purple ambient lighting, high contrast, looking confident, modern professional aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDvTGNiVqtmsz0hMes51yD0jt5Z2-wCkGhVb8top1m_ORpytZJo0VXOpTH4O3B8lJxmTmH2QCaZ40GEW41XIhAPA41b67XO5mveRZNsvIswBScDkyQurzlsCQEf0VKJdNgH6qZi1lud0X2nPz80fRiVDqLLdHOjK3W0ESIUobank2Cc44b8DcXZpPA_m0Ecx7TxPvfPmX9wErawuVCQ_Ty2mw2JKxKo0cZ0ZbxGd2HSTs3BFrbsWg43gfepXC4qJBo4ekbD1Q4f0Eg')"></div>
+</div>
+</div>
+<h5 class="font-headline-md text-white">Elena Vance</h5>
+<p class="text-label-md text-primary font-bold tracking-wider">FOUNDER &amp; CEO</p>
+</div>
+<!-- Team Member 2 -->
+<div class="group text-center">
+<div class="relative mb-md inline-block">
+<div class="absolute -inset-1 bg-gradient-to-tr from-secondary-fixed to-tertiary rounded-2xl opacity-0 group-hover:opacity-100 blur-md transition-all duration-500"></div>
+<div class="relative w-40 h-40 md:w-56 md:h-56 rounded-2xl overflow-hidden glass-panel border-2 border-white/5">
+<div class="w-full h-full bg-cover bg-center grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Stylized neon-tinted headshot of a male CTO, cyan ambient lighting, wearing a minimalist black turtleneck, sleek cyber-punk aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAp6fY_p9Hk0wQhA5wGE4tbQ5O3TnX7xjb1jSDN6KBGXL1Wsb-wgHNzb-qmy7g6f--VIM4Z8ZW2K8eOjh97WrGQBcu1FTjNNzFeib14rBnlgrYbO7dl8DTIhdluKDKktTpAlzJAwotNZ09S4qYnGjr61Ya8XAucucp96nFVh5rb1zD2lpmhQPlOPNDfs2ZoSlaWAjkS6G1gxS7Gmne2A5axwb1nL0gcx85MSf7JZmzZPQPVBchGe4uXPfQMGyJeXIGQoK202suCa6c')"></div>
+</div>
+</div>
+<h5 class="font-headline-md text-white">Marcus Chen</h5>
+<p class="text-label-md text-secondary-fixed font-bold tracking-wider">CHIEF ARCHITECT</p>
+</div>
+<!-- Team Member 3 -->
+<div class="group text-center">
+<div class="relative mb-md inline-block">
+<div class="absolute -inset-1 bg-gradient-to-tr from-tertiary to-primary rounded-2xl opacity-0 group-hover:opacity-100 blur-md transition-all duration-500"></div>
+<div class="relative w-40 h-40 md:w-56 md:h-56 rounded-2xl overflow-hidden glass-panel border-2 border-white/5">
+<div class="w-full h-full bg-cover bg-center grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Stylized neon-tinted headshot of a non-binary Head of Product, green and violet ambient lighting, creative and expressive pose." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAndGrzmF3Wjnf8og7viMOW3tPoW7Nw6VgNpADYlKf00mA-lEeecg27mdS3ljUuFnYVi5r2Tp2EVMcEITrFFZm3IPzgFV50qth1xMpce2xg7WtFULcqPEDB4_1zcu34qdByPeIQ-DfZvCze7yCArFxjVDkPu4IVnSjpcLXMWnrvmgXFEi0c-XYZQv4IxE_hIhYTR6dsykUwqzTRrt3hJE9Cu9ldGs8YVGLe2ylEBysKBhBVX21nZhsyg0oCiPX4TeVZgonufcDVW_M')"></div>
+</div>
+</div>
+<h5 class="font-headline-md text-white">Sasha Roe</h5>
+<p class="text-label-md text-tertiary font-bold tracking-wider">PRODUCT VISION</p>
+</div>
+<!-- Team Member 4 -->
+<div class="group text-center">
+<div class="relative mb-md inline-block">
+<div class="absolute -inset-1 bg-gradient-to-tr from-error to-secondary-container rounded-2xl opacity-0 group-hover:opacity-100 blur-md transition-all duration-500"></div>
+<div class="relative w-40 h-40 md:w-56 md:h-56 rounded-2xl overflow-hidden glass-panel border-2 border-white/5">
+<div class="w-full h-full bg-cover bg-center grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="Stylized neon-tinted headshot of a female Head of Safety, soft amber and red ambient lighting, looking empathetic and authoritative." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB-PQjoWFdkuGvyKU462nO4ypDJygHErMO3FaPT2uQFtaC_sBKF98UompfKfQx-q3zrEyX6eKZkognkyNeHSeAr3kgLb7KlFzk70jqoHJztGk4IgulARb-ndK1MBiBDZ2egky9rwfg-kQZZpdxxKm2wxsV3ePWrPs5q8ckpiqoLUXCsETKSgsCu_XFJyZoCh-K7Y8UbVT_QLiKC9_6pJZzegXrl5VTwfzTTvRdthn11EdThi0S_jtvHPedFUBbJbJlP0mtBW8qPAn4')"></div>
+</div>
+</div>
+<h5 class="font-headline-md text-white">Dr. Aris Thorne</h5>
+<p class="text-label-md text-error font-bold tracking-wider">VP OF SAFETY</p>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="py-xl relative overflow-hidden bg-surface-container-highest">
+
+<div class="container mx-auto px-xl relative z-10 text-center">
+<h2 class="font-display-lg text-display-lg mb-lg">Ready to feel the <span class="text-primary italic">Pulse</span>?</h2>
+<p class="font-body-lg text-on-surface-variant mb-xl max-w-xl mx-auto">Join the millions who have already found their next best friend, mentor, or inspiration.</p>
+<button class="bg-primary text-on-primary font-display-lg text-headline-md px-xl py-lg rounded-2xl neon-glow-purple transform transition-all active:scale-95">Start Matching Now</button>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest py-xl border-t border-white/5">
+<div class="container mx-auto px-xl grid grid-cols-1 md:grid-cols-4 gap-xl">
+<div class="md:col-span-1">
+<h1 class="font-display-lg text-headline-lg font-black text-primary tracking-tighter mb-md">Pulse</h1>
+<p class="text-on-surface-variant text-label-md">Building the future of global connection, one conversation at a time.</p>
+</div>
+<div>
+<h6 class="font-bold text-white mb-md">Platform</h6>
+<ul class="space-y-sm text-on-surface-variant text-label-md">
+<li><a class="hover:text-primary transition-colors" href="#">Discover</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Safety Center</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Community Rules</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Premium Perks</a></li>
+</ul>
+</div>
+<div>
+<h6 class="font-bold text-white mb-md">Company</h6>
+<ul class="space-y-sm text-on-surface-variant text-label-md">
+<li><a class="hover:text-primary transition-colors" href="#">About Us</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Careers</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Press Kit</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Contact</a></li>
+</ul>
+</div>
+<div>
+<h6 class="font-bold text-white mb-md">Legal</h6>
+<ul class="space-y-sm text-on-surface-variant text-label-md">
+<li><a class="hover:text-primary transition-colors" href="#">Privacy Policy</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Terms of Service</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Cookie Policy</a></li>
+</ul>
+</div>
+</div>
+<div class="container mx-auto px-xl mt-xl pt-lg border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-md">
+<p class="text-label-sm text-on-surface-variant">© 2024 Pulse Discovery Inc. All rights reserved.</p>
+<div class="flex gap-md">
+<a class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all" href="#"><span class="material-symbols-outlined text-md">public</span></a>
+<a class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all" href="#"><span class="material-symbols-outlined text-md">alternate_email</span></a>
+<a class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all" href="#"><span class="material-symbols-outlined text-md">share</span></a>
+</div>
+</div>
+</footer>
+<script>
+        // Simple horizontal scroll control
+        const scrollContainer = document.getElementById('values-scroll');
+        const scrollLeft = document.getElementById('scroll-left');
+        const scrollRight = document.getElementById('scroll-right');
+
+        scrollRight.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: 424, behavior: 'smooth' });
+        });
+
+        scrollLeft.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: -424, behavior: 'smooth' });
+        });
+
+        // Parallax simple effect on scroll
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const parallaxElements = document.querySelectorAll('.parallax-bg');
+            parallaxElements.forEach(el => {
+                const speed = 0.5;
+                el.style.backgroundPositionY = (scrolled * speed) + 'px';
+            });
+        });
+    </script>
+</body></html>

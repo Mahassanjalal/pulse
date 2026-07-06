@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pulse | Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary": "#570067",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#2a2a2b",
+                    "on-tertiary-container": "#043200",
+                    "on-surface-variant": "#d8bfd6",
+                    "outline": "#a08a9f",
+                    "on-background": "#e5e2e3",
+                    "on-secondary-container": "#00686f",
+                    "surface-container": "#201f20",
+                    "on-error": "#690005",
+                    "on-primary-fixed": "#350040",
+                    "tertiary-container": "#1da800",
+                    "on-secondary": "#00363a",
+                    "secondary-container": "#00eefc",
+                    "tertiary-fixed": "#79ff5b",
+                    "primary": "#f7acff",
+                    "outline-variant": "#534153",
+                    "on-tertiary-fixed-variant": "#095300",
+                    "on-surface": "#e5e2e3",
+                    "surface": "#131314",
+                    "on-error-container": "#ffdad6",
+                    "secondary-fixed": "#7df4ff",
+                    "on-primary-fixed-variant": "#7b0091",
+                    "inverse-surface": "#e5e2e3",
+                    "secondary-fixed-dim": "#00dbe9",
+                    "on-secondary-fixed-variant": "#004f54",
+                    "background": "#131314",
+                    "secondary": "#d3fbff",
+                    "primary-fixed": "#ffd6ff",
+                    "inverse-on-surface": "#313031",
+                    "surface-container-highest": "#353436",
+                    "error": "#ffb4ab",
+                    "surface-dim": "#131314",
+                    "inverse-primary": "#a100be",
+                    "on-tertiary": "#053900",
+                    "primary-container": "#e14aff",
+                    "primary-fixed-dim": "#f7acff",
+                    "surface-container-low": "#1c1b1c",
+                    "tertiary": "#2ae500",
+                    "on-secondary-fixed": "#002022",
+                    "surface-container-lowest": "#0e0e0f",
+                    "surface-bright": "#3a393a",
+                    "on-primary-container": "#4c005b",
+                    "tertiary-fixed-dim": "#2ae500",
+                    "surface-variant": "#353436",
+                    "surface-tint": "#f7acff",
+                    "on-tertiary-fixed": "#022100"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "gutter": "20px",
+                    "md": "16px",
+                    "unit": "4px",
+                    "sm": "8px",
+                    "lg": "24px",
+                    "xl": "40px",
+                    "container-max": "1440px"
+            },
+            "fontFamily": {
+                    "label-sm": ["Inter"],
+                    "headline-lg": ["Montserrat"],
+                    "body-md": ["Inter"],
+                    "label-md": ["Inter"],
+                    "headline-lg-mobile": ["Montserrat"],
+                    "headline-md": ["Montserrat"],
+                    "body-lg": ["Inter"],
+                    "display-lg": ["Montserrat"]
+            },
+            "fontSize": {
+                    "label-sm": ["12px", {"lineHeight": "1", "fontWeight": "500"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+      body {
+        background-color: #0A0A0B;
+        color: #e5e2e3;
+        overflow-x: hidden;
+      }
+      .glass-card {
+        background: rgba(26, 26, 30, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      }
+      .glass-stroke {
+        border: 1px solid;
+        border-image-source: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 100%);
+      }
+      .neon-glow:hover {
+        box-shadow: 0px 0px 20px #D800FF;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .active-tab-indicator {
+        box-shadow: 0px 0px 12px rgba(247, 172, 255, 0.4);
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(247, 172, 255, 0.2);
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(247, 172, 255, 0.4);
+      }
+    </style>
+</head>
+<body class="font-body-md text-on-surface selection:bg-primary/30">
+<!-- TopAppBar Shell -->
+<header class="fixed top-0 right-0 left-0 z-50 flex items-center justify-between px-xl h-20 bg-surface/60 backdrop-blur-lg border-b border-white/10">
+<div class="flex items-center gap-md">
+<h1 class="font-display-lg text-display-lg font-black text-primary tracking-tighter">Pulse</h1>
+</div>
+<nav class="hidden md:flex items-center gap-xl">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-all" href="#">Discover</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-all" href="#">Premium</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-all" href="#">Support</a>
+</nav>
+<div class="flex items-center gap-lg">
+<div class="relative hidden lg:block">
+<input class="bg-surface-container-low border border-white/10 rounded-full px-lg py-sm w-64 focus:outline-none focus:border-secondary-fixed transition-all text-sm" placeholder="Search friends..." type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-2 text-on-surface-variant">search</span>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-all">help</button>
+<button class="material-symbols-outlined text-primary transition-all active:scale-95">settings</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary active-tab-indicator">
+<img class="w-full h-full object-cover" data-alt="A premium close-up headshot of a stylish professional user with vibrant studio lighting and electric purple neon backlighting. The subject has a warm expression and is set against a deep obsidian background, matching the Pulse platform's sophisticated cinematic aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuACL2P0eBUj5lWTOtPTX7s0fE-WFPDugC6p_jc7VOENNIUmBXRMJEySQGXzcV4aWgYGmWMLZAGiJ8ZXwERc9JZ-t5r4-k8UC6tbsGEV3fYnhlltvwkak8N3LKqgSh2W2iBZcuHCHEeyZ9PAI4khN-bZTy6pBqLV0Kes5lvZjSzYffyMkvRCMbJGrmg_L2zCbbuyniA-mxHvY7XE2Qiz7j3YrRFNQ6SDjH6i9L9mflhNSDILl5k5iebgKjkFkURkPbj7okoR8vjoMhE"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-full w-72 flex flex-col p-lg pt-24 bg-surface/80 backdrop-blur-xl border-r border-white/10 z-40 hidden md:flex">
+<div class="flex items-center gap-md mb-xl px-md">
+<div class="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container">person</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-primary">Pulse</h2>
+<p class="text-xs text-on-surface-variant">Global Discovery</p>
+</div>
+</div>
+<nav class="flex flex-col gap-sm flex-1">
+<a class="flex items-center gap-md p-md rounded-xl text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-xl text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-label-md text-label-md">Messages</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-xl text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-md text-label-md">Friends</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-xl text-secondary-fixed font-bold border-l-4 border-secondary-fixed bg-secondary-fixed/10 transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-xl text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span class="font-label-md text-label-md">Notifications</span>
+</a>
+</nav>
+<button class="mt-auto mb-lg bg-primary text-on-primary py-md px-xl rounded-full font-bold neon-glow transition-all active:scale-95">
+            Start Matching
+        </button>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-72 pt-24 pb-xl px-gutter md:px-xl min-h-screen">
+<div class="max-w-5xl mx-auto">
+<div class="mb-xl">
+<h1 class="font-headline-lg text-headline-lg mb-xs">Settings &amp; Preferences</h1>
+<p class="text-on-surface-variant">Customize your global discovery experience and account security.</p>
+</div>
+<!-- Bento Grid Layout for Settings -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+<!-- Account Settings (Large Column) -->
+<section class="lg:col-span-8 space-y-lg">
+<!-- Account Section -->
+<div class="glass-card rounded-3xl p-lg glass-stroke">
+<div class="flex items-center gap-md mb-lg">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+<h2 class="font-headline-md text-headline-md">Account Settings</h2>
+</div>
+<div class="space-y-lg">
+<div class="flex flex-col md:flex-row gap-lg items-start md:items-center">
+<div class="relative group">
+<div class="w-24 h-24 rounded-2xl overflow-hidden glass-stroke">
+<img class="w-full h-full object-cover" data-alt="A highly detailed close-up of a diverse male user with artistic lighting in an obsidian-walled studio. Neon violet highlights define his silhouette, reflecting the modern glassmorphism aesthetic of the Pulse platform. The image is crisp, professional, and emphasizes high-end digital identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9ul_Xs7EXGvBtczvmqtIa-S9Q1JbEQxkJWFVRsq5pZbTUpflya-4J24ysjCIJI8ZMlUTFg3W64tnqk0Qor5Q2USd_Vwb-cL2sri1XiUA5x4flho5at0OSjP3_MrajNau0d7wQ8rrIN19MEJb-_VuiIfFoFP4uh_n4Ir1cJZ_D191FoEGltlDjlz2Y2lyIMIOrksCsnkOHnG7ML-QVuttMv_kVjY2B9ZuKv0QjkMol6m3RYHenS5m7iQoFxobaXOs5QmNmngG0mC4"/>
+</div>
+<button class="absolute -bottom-2 -right-2 bg-secondary-fixed text-on-secondary-fixed w-8 h-8 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-sm">edit</span>
+</button>
+</div>
+<div class="flex-1 space-y-md w-full">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div class="space-y-xs">
+<label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Display Name</label>
+<input class="w-full bg-white/5 border border-white/10 rounded-xl px-md py-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" type="text" value="Julian_Vibe"/>
+</div>
+<div class="space-y-xs">
+<label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Email Address</label>
+<input class="w-full bg-white/5 border border-white/10 rounded-xl px-md py-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" type="email" value="julian@pulse-discovery.com"/>
+</div>
+</div>
+</div>
+</div>
+<div class="pt-md border-t border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-md">
+<div>
+<h4 class="font-bold">Password</h4>
+<p class="text-sm text-on-surface-variant">Last changed 3 months ago</p>
+</div>
+<button class="px-lg py-sm border border-white/20 rounded-xl hover:bg-white/5 transition-all">Change Password</button>
+</div>
+</div>
+</div>
+<!-- Video & Audio Section -->
+<div class="glass-card rounded-3xl p-lg glass-stroke">
+<div class="flex items-center gap-md mb-lg">
+<span class="material-symbols-outlined text-secondary-fixed">videocam</span>
+<h2 class="font-headline-md text-headline-md">Video &amp; Audio</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-xl">
+<div class="space-y-lg">
+<div class="space-y-xs">
+<label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Camera Input</label>
+<select class="w-full bg-white/5 border border-white/10 rounded-xl px-md py-sm focus:border-secondary-fixed focus:ring-1 focus:ring-secondary-fixed outline-none appearance-none cursor-pointer">
+<option class="bg-surface">Integrated FaceTime HD Camera</option>
+<option class="bg-surface">Logitech Brio 4K</option>
+<option class="bg-surface">OBS Virtual Camera</option>
+</select>
+</div>
+<div class="space-y-md">
+<div class="flex items-center justify-between">
+<label class="text-sm">Background Blur</label>
+<button class="w-12 h-6 bg-primary rounded-full relative transition-all shadow-[0_0_8px_rgba(247,172,255,0.4)]">
+<div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<label class="text-sm">Low Light Enhancement</label>
+<button class="w-12 h-6 bg-white/10 rounded-full relative transition-all">
+<div class="absolute left-1 top-1 w-4 h-4 bg-on-surface-variant rounded-full"></div>
+</button>
+</div>
+</div>
+</div>
+<div class="space-y-md">
+<div class="w-full aspect-video rounded-2xl overflow-hidden glass-stroke relative group">
+<img class="w-full h-full object-cover" data-alt="A real-time webcam preview simulation showing a person centered in the frame. The background is softly blurred with bokeh effects, and the lighting is a mix of natural window light and subtle neon violet desk light. The person is smiling slightly, demonstrating the high-quality video processing of the Pulse platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHJ026W0YHKv-E301pOH2ZwKHKd0OozGo9cTDpMXdrRd9ktcyB27uRQdQbb0TVyJZfTEVYiaGlBSEWuRxQuYqeOkfMLrwQ2d72iHuKFXfeeER2-v7zdL2cZxVraOkL-OZg4NScdvY5UiQU1j7OV99Pmaoi4OQFW_LVDuSixxW33C_Jj_w8d0rB7vz5y7InVwdUIJyXHutwM_LiBeyXPivdbcyxqWS92Cv4rUTxeUcJ0B2hdKN6L0opc0lsybFk2hhiFID4WrCHWfc"/>
+<div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="text-xs font-bold tracking-tighter bg-black/60 px-md py-xs rounded-full">LIVE PREVIEW</span>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+<div class="h-full bg-secondary-fixed w-1/3 shadow-[0_0_8px_rgba(125,244,255,0.6)]"></div>
+</div>
+<span class="material-symbols-outlined text-sm text-secondary-fixed">mic</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Sidebar Settings (Small Column) -->
+<aside class="lg:col-span-4 space-y-lg">
+<!-- App Appearance -->
+<div class="glass-card rounded-3xl p-lg glass-stroke">
+<div class="flex items-center gap-md mb-lg">
+<span class="material-symbols-outlined text-tertiary">palette</span>
+<h2 class="font-headline-md text-headline-md">Appearance</h2>
+</div>
+<div class="space-y-lg">
+<div class="grid grid-cols-2 gap-md">
+<button class="flex flex-col items-center gap-sm p-md rounded-2xl bg-white/5 border-2 border-primary ring-2 ring-primary/20 transition-all">
+<div class="w-full h-12 bg-surface rounded-lg border border-white/10 flex flex-col gap-1 p-2">
+<div class="h-1 w-1/2 bg-primary rounded"></div>
+<div class="h-1 w-1/3 bg-white/20 rounded"></div>
+</div>
+<span class="text-sm font-bold">Dark Glow</span>
+</button>
+<button class="flex flex-col items-center gap-sm p-md rounded-2xl bg-white/5 border border-white/10 hover:border-white/30 transition-all">
+<div class="w-full h-12 bg-white rounded-lg border border-white/10 flex flex-col gap-1 p-2">
+<div class="h-1 w-1/2 bg-blue-500 rounded"></div>
+<div class="h-1 w-1/3 bg-gray-200 rounded"></div>
+</div>
+<span class="text-sm text-on-surface-variant">Lumina</span>
+</button>
+</div>
+<div class="space-y-xs">
+<label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Language</label>
+<select class="w-full bg-white/5 border border-white/10 rounded-xl px-md py-sm focus:border-tertiary focus:ring-1 focus:ring-tertiary outline-none appearance-none cursor-pointer">
+<option class="bg-surface">English (US)</option>
+<option class="bg-surface">Spanish (ES)</option>
+<option class="bg-surface">French (FR)</option>
+<option class="bg-surface">Japanese (JP)</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Privacy & Trust -->
+<div class="glass-card rounded-3xl p-lg glass-stroke overflow-hidden relative">
+<div class="absolute -right-12 -top-12 w-32 h-32 bg-tertiary/10 blur-3xl rounded-full"></div>
+<div class="flex items-center gap-md mb-lg">
+<span class="material-symbols-outlined text-tertiary-fixed">verified_user</span>
+<h2 class="font-headline-md text-headline-md">Privacy</h2>
+</div>
+<div class="space-y-lg">
+<div class="p-md rounded-2xl bg-tertiary-container/10 border border-tertiary/20 flex items-center justify-between">
+<div>
+<p class="text-xs font-bold text-tertiary-fixed uppercase">Trust Score</p>
+<h3 class="text-xl font-bold">98% Excellent</h3>
+</div>
+<span class="material-symbols-outlined text-3xl text-tertiary-fixed">verified</span>
+</div>
+<ul class="space-y-md">
+<li class="flex items-center justify-between text-sm">
+<span class="text-on-surface-variant">Who can match with me?</span>
+<span class="font-bold text-primary">Everyone</span>
+</li>
+<li class="flex items-center justify-between text-sm">
+<span class="text-on-surface-variant">Show location tag?</span>
+<button class="w-10 h-5 bg-white/10 rounded-full relative transition-all">
+<div class="absolute left-1 top-1 w-3 h-3 bg-on-surface-variant rounded-full"></div>
+</button>
+</li>
+<li class="flex items-center justify-between text-sm">
+<span class="text-on-surface-variant">Blocked Users</span>
+<span class="font-bold">12</span>
+</li>
+</ul>
+<button class="w-full py-md text-error font-bold border border-error/20 rounded-xl hover:bg-error/5 transition-all">
+                                Clear Match History
+                            </button>
+</div>
+</div>
+</aside>
+</div>
+<!-- Danger Zone / Footer -->
+<div class="mt-xl pt-xl border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-lg">
+<div class="flex gap-lg">
+<a class="text-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="text-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Terms of Service</a>
+<a class="text-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Safety Center</a>
+</div>
+<button class="text-error-container hover:text-error text-sm font-bold transition-colors">Deactivate Account</button>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation for Mobile -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/80 backdrop-blur-xl flex items-center justify-around px-md z-50">
+<button class="flex flex-col items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Home</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Chat</span>
+</button>
+<button class="flex flex-col items-center justify-center -mt-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg active-tab-indicator">
+<span class="material-symbols-outlined">bolt</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-primary">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Set</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Me</span>
+</button>
+</nav>
+<script>
+        // Simple interactivity for toggles
+        document.querySelectorAll('button[class*="rounded-full relative"]').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                const isOff = toggle.classList.contains('bg-white/10');
+                const indicator = toggle.querySelector('div');
+                
+                if (isOff) {
+                    toggle.classList.remove('bg-white/10');
+                    toggle.classList.add('bg-primary', 'shadow-[0_0_8px_rgba(247,172,255,0.4)]');
+                    indicator.classList.remove('left-1', 'bg-on-surface-variant');
+                    indicator.classList.add('right-1', 'bg-white');
+                } else {
+                    toggle.classList.add('bg-white/10');
+                    toggle.classList.remove('bg-primary', 'shadow-[0_0_8px_rgba(247,172,255,0.4)]');
+                    indicator.classList.add('left-1', 'bg-on-surface-variant');
+                    indicator.classList.remove('right-1', 'bg-white');
+                }
+            });
+        });
+
+        // Search bar micro-interaction
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-105');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-105');
+        });
+    </script>
+</body></html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pulse | Join the Discovery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-container": "#4c005b",
+                    "inverse-surface": "#e5e2e3",
+                    "surface": "#131314",
+                    "primary-fixed-dim": "#f7acff",
+                    "outline-variant": "#534153",
+                    "surface-container": "#201f20",
+                    "secondary-container": "#00eefc",
+                    "on-tertiary": "#053900",
+                    "surface-container-low": "#1c1b1c",
+                    "tertiary-fixed-dim": "#2ae500",
+                    "tertiary": "#2ae500",
+                    "error": "#ffb4ab",
+                    "primary-container": "#e14aff",
+                    "surface-variant": "#353436",
+                    "surface-bright": "#3a393a",
+                    "secondary": "#d3fbff",
+                    "on-tertiary-fixed": "#022100",
+                    "on-secondary-fixed-variant": "#004f54",
+                    "on-background": "#e5e2e3",
+                    "on-tertiary-fixed-variant": "#095300",
+                    "inverse-primary": "#a100be",
+                    "tertiary-fixed": "#79ff5b",
+                    "on-primary-fixed": "#350040",
+                    "on-tertiary-container": "#043200",
+                    "tertiary-container": "#1da800",
+                    "surface-container-high": "#2a2a2b",
+                    "on-primary-fixed-variant": "#7b0091",
+                    "inverse-on-surface": "#313031",
+                    "on-surface": "#e5e2e3",
+                    "surface-dim": "#131314",
+                    "secondary-fixed": "#7df4ff",
+                    "on-error-container": "#ffdad6",
+                    "on-primary": "#570067",
+                    "on-surface-variant": "#d8bfd6",
+                    "on-error": "#690005",
+                    "on-secondary": "#00363a",
+                    "secondary-fixed-dim": "#00dbe9",
+                    "background": "#131314",
+                    "surface-container-lowest": "#0e0e0f",
+                    "on-secondary-fixed": "#002022",
+                    "outline": "#a08a9f",
+                    "surface-tint": "#f7acff",
+                    "surface-container-highest": "#353436",
+                    "primary-fixed": "#ffd6ff",
+                    "error-container": "#93000a",
+                    "primary": "#f7acff",
+                    "on-secondary-container": "#00686f"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "24px",
+                    "container-max": "1440px",
+                    "xs": "4px",
+                    "md": "16px",
+                    "unit": "4px",
+                    "gutter": "20px",
+                    "xl": "40px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "display-lg": ["Montserrat"],
+                    "label-sm": ["Inter"],
+                    "headline-lg": ["Montserrat"],
+                    "label-md": ["Inter"],
+                    "headline-lg-mobile": ["Montserrat"],
+                    "headline-md": ["Montserrat"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "body-lg": ["18px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "label-sm": ["12px", {"lineHeight": "1", "fontWeight": "500"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "label-md": ["14px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #131314;
+            color: #e5e2e3;
+            overflow: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(26, 26, 30, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .neon-glow:hover {
+            box-shadow: 0px 0px 20px rgba(247, 172, 255, 0.4);
+        }
+
+        .kinetic-text {
+            animation: pulse-tracking 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse-tracking {
+            0%, 100% { letter-spacing: -0.05em; }
+            50% { letter-spacing: 0.05em; }
+        }
+
+        .fade-transition {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #00eefc !important;
+            box-shadow: 0 0 10px rgba(0, 238, 252, 0.2);
+        }
+
+        .online-pulse {
+            position: relative;
+        }
+        .online-pulse::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #2ae500;
+            border-radius: 50%;
+            left: -14px;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 0 rgba(42, 229, 0, 0.4);
+            animation: pulse-ring 1.5s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0px rgba(42, 229, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(42, 229, 0, 0); }
+            100% { box-shadow: 0 0 0 0px rgba(42, 229, 0, 0); }
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-primary-container selection:text-on-primary-container">
+<main class="flex min-h-screen w-full overflow-hidden">
+<!-- Left Section: Visual Kinetic Brand Side -->
+<section class="hidden lg:flex relative w-1/2 flex-col justify-between p-xl overflow-hidden">
+<!-- Animated Shader Background -->
+
+<!-- Overlay for Depth -->
+<div class="absolute inset-0 bg-gradient-to-br from-background/40 via-transparent to-background/80 z-10 pointer-events-none"></div>
+<!-- Top Brand Section -->
+<div class="relative z-20 flex items-center gap-sm">
+<span class="font-display-lg text-display-lg font-black text-primary tracking-tighter kinetic-text uppercase">Pulse</span>
+</div>
+<!-- Center Visual Content -->
+<div class="relative z-20 max-w-lg">
+<h1 class="font-headline-lg text-headline-lg text-white mb-md">
+                    Connect with the <span class="text-primary italic">Pulse</span> of the world.
+                </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant opacity-80">
+                    Spontaneous digital face-to-face interactions. Safe, fast, and electric.
+                </p>
+</div>
+<!-- Bottom Badge Section -->
+<div class="relative z-20">
+<div class="inline-flex items-center glass-panel px-md py-sm rounded-full border border-white/10">
+<span class="online-pulse ml-4 font-label-md text-label-md text-white">Join 100k+ users online</span>
+</div>
+</div>
+</section>
+<!-- Right Section: Auth UI -->
+<section class="flex flex-col w-full lg:w-1/2 items-center justify-center p-lg relative bg-background">
+<!-- Mobile Logo Only -->
+<div class="lg:hidden absolute top-10 left-1/2 -translate-x-1/2 text-center">
+<span class="font-display-lg text-display-lg font-black text-primary tracking-tighter">Pulse</span>
+</div>
+<div class="w-full max-w-md space-y-lg">
+<!-- Auth Toggle Header -->
+<div class="flex flex-col space-y-md text-center lg:text-left">
+<h2 class="font-headline-lg text-headline-lg text-on-surface" id="auth-title">Welcome back</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Enter your details to access your global discovery.</p>
+</div>
+<!-- Tab Toggle -->
+<div class="flex p-xs bg-surface-container rounded-xl border border-white/5 shadow-inner">
+<button class="flex-1 py-sm rounded-lg font-label-md text-label-md transition-all duration-300 bg-surface-variant text-white shadow-lg" id="login-tab" onclick="toggleAuth('login')">
+                        Login
+                    </button>
+<button class="flex-1 py-sm rounded-lg font-label-md text-label-md transition-all duration-300 text-on-surface-variant hover:text-white" id="register-tab" onclick="toggleAuth('register')">
+                        Sign Up
+                    </button>
+</div>
+<!-- Auth Form -->
+<form class="space-y-md" id="auth-form">
+<div class="space-y-sm">
+<label class="font-label-md text-label-md text-on-surface-variant px-1" for="identity">Email or Phone</label>
+<input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body-md" id="identity" placeholder="name@email.com" type="text"/>
+</div>
+<div class="space-y-sm">
+<div class="flex justify-between items-center px-1">
+<label class="font-label-md text-label-md text-on-surface-variant" for="password">Password</label>
+<a class="text-secondary font-label-sm text-label-sm hover:underline" href="#">Forgot?</a>
+</div>
+<input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body-md" id="password" placeholder="••••••••" type="password"/>
+</div>
+<button class="w-full h-14 bg-primary text-on-primary font-headline-md text-headline-md rounded-xl neon-glow transition-all active:scale-[0.98] mt-lg" type="submit">
+                        Continue
+                    </button>
+</form>
+<!-- Divider -->
+<div class="relative flex items-center py-md">
+<div class="flex-grow border-t border-white/10"></div>
+<span class="flex-shrink mx-4 font-label-sm text-label-sm text-outline/60">OR CONTINUE WITH</span>
+<div class="flex-grow border-t border-white/10"></div>
+</div>
+<!-- Social Logins -->
+<div class="grid grid-cols-2 gap-md">
+<button class="flex items-center justify-center gap-sm h-14 glass-panel rounded-xl hover:bg-white/5 transition-colors font-label-md text-label-md">
+<img class="w-5 h-5" data-alt="Official Google G-logo symbol in minimalist vector style with brand colors, clean and professional design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyM3pFPDclIXvU8muwrehNxhIZQzQTJqbKFs9v0jcHMXjXasR0nBMPGoJbLIASlm6fTEt4iOxsl6XF06oYiWtP8IXottSecbagMDaecmOPh3j_QoavPy-dWIp5QzGtfcF7xmfySi2BH7CTfLdbA-Ze0flQ3LbV3YBgiah_dq30Iyj8HRn7p3H8jxsuU-AlAIXqT0Wz-vKveG1TRpk9QWLoMDsTRYrilRm18bXOD01TIzjCvOaV6PRt-C27jIdUiiTNeLtt7Ict5G8"/>
+                        Google
+                    </button>
+<button class="flex items-center justify-center gap-sm h-14 glass-panel rounded-xl hover:bg-white/5 transition-colors font-label-md text-label-md">
+<img class="w-5 h-5" data-alt="Official Apple logo in minimalist monochrome white vector style, sleek premium technology brand aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCiuFHaq6FNmqk_PFoJlR_tn40FztdpzSXqnDrqtaPUniA0UUQhzTJDS2BRE9gLDkHGV4dw5QxZqNJTy3Ng9p81q-HGLp62nlpHoi02P2Ufh-HsZGnvMvCKV4j3ket5yxONEaLPiJQiA2dbGRqyVs4lK-JpBUzZXtkBA4ivPnqQD9nTvj-BzwfIefhTgz4qmLXBtmBWcFKl200L9m4uKYL_VFKLdzT9JNZYahJu_6Dfp2dA75UkXqU6AWVjQZfeumzOujcbN6MNd7w"/>
+                        Apple
+                    </button>
+</div>
+<!-- Footer Legal -->
+<p class="text-center font-label-sm text-label-sm text-on-surface-variant/40 pt-md">
+                    By continuing, you agree to Pulse's 
+                    <a class="text-on-surface-variant/60 hover:text-primary underline" href="#">Terms of Service</a> and 
+                    <a class="text-on-surface-variant/60 hover:text-primary underline" href="#">Privacy Policy</a>.
+                </p>
+</div>
+</section>
+</main>
+<script>
+        function toggleAuth(mode) {
+            const loginTab = document.getElementById('login-tab');
+            const registerTab = document.getElementById('register-tab');
+            const title = document.getElementById('auth-title');
+            const identityLabel = document.querySelector('label[for="identity"]');
+            const submitBtn = document.querySelector('button[type="submit"]');
+
+            if (mode === 'login') {
+                loginTab.classList.add('bg-surface-variant', 'text-white', 'shadow-lg');
+                loginTab.classList.remove('text-on-surface-variant');
+                registerTab.classList.remove('bg-surface-variant', 'text-white', 'shadow-lg');
+                registerTab.classList.add('text-on-surface-variant');
+                
+                title.innerText = 'Welcome back';
+                submitBtn.innerText = 'Continue';
+            } else {
+                registerTab.classList.add('bg-surface-variant', 'text-white', 'shadow-lg');
+                registerTab.classList.remove('text-on-surface-variant');
+                loginTab.classList.remove('bg-surface-variant', 'text-white', 'shadow-lg');
+                loginTab.classList.add('text-on-surface-variant');
+                
+                title.innerText = 'Create account';
+                submitBtn.innerText = 'Join Pulse';
+            }
+
+            // Simple transition effect
+            const form = document.getElementById('auth-form');
+            form.style.opacity = '0';
+            form.style.transform = 'translateY(10px)';
+            setTimeout(() => {
+                form.style.opacity = '1';
+                form.style.transform = 'translateY(0)';
+            }, 150);
+        }
+
+        // Add some hover interactions for social buttons
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                // Potential for haptic or audio cues
+            });
+        });
+    </script>
+</body></html>

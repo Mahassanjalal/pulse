@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pulse | Global Discovery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Config Verbatim -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface": "#131314",
+                    "inverse-primary": "#a100be",
+                    "on-tertiary-fixed": "#022100",
+                    "on-primary-fixed-variant": "#7b0091",
+                    "on-tertiary-fixed-variant": "#095300",
+                    "on-error-container": "#ffdad6",
+                    "on-primary": "#570067",
+                    "surface-variant": "#353436",
+                    "surface-container-highest": "#353436",
+                    "on-primary-container": "#4c005b",
+                    "on-tertiary-container": "#043200",
+                    "primary-fixed": "#ffd6ff",
+                    "secondary-container": "#00eefc",
+                    "on-primary-fixed": "#350040",
+                    "surface-tint": "#f7acff",
+                    "secondary-fixed-dim": "#00dbe9",
+                    "tertiary-fixed": "#79ff5b",
+                    "primary-fixed-dim": "#f7acff",
+                    "tertiary-container": "#1da800",
+                    "inverse-on-surface": "#313031",
+                    "surface-bright": "#3a393a",
+                    "surface-container-high": "#2a2a2b",
+                    "inverse-surface": "#e5e2e3",
+                    "on-background": "#e5e2e3",
+                    "surface-dim": "#131314",
+                    "primary": "#f7acff",
+                    "tertiary-fixed-dim": "#2ae500",
+                    "primary-container": "#e14aff",
+                    "on-surface-variant": "#d8bfd6",
+                    "outline-variant": "#534153",
+                    "error": "#ffb4ab",
+                    "background": "#131314",
+                    "on-secondary": "#00363a",
+                    "surface-container": "#201f20",
+                    "on-error": "#690005",
+                    "secondary-fixed": "#7df4ff",
+                    "on-tertiary": "#053900",
+                    "on-secondary-container": "#00686f",
+                    "secondary": "#d3fbff",
+                    "error-container": "#93000a",
+                    "outline": "#a08a9f",
+                    "on-surface": "#e5e2e3",
+                    "tertiary": "#2ae500",
+                    "on-secondary-fixed": "#002022",
+                    "surface-container-low": "#1c1b1c",
+                    "surface-container-lowest": "#0e0e0f",
+                    "on-secondary-fixed-variant": "#004f54"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "xl": "40px",
+                    "gutter": "20px",
+                    "sm": "8px",
+                    "unit": "4px",
+                    "md": "16px",
+                    "lg": "24px",
+                    "container-max": "1440px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Montserrat"],
+                    "headline-lg": ["Montserrat"],
+                    "label-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "display-lg": ["Montserrat"],
+                    "headline-lg-mobile": ["Montserrat"],
+                    "label-md": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "1", "fontWeight": "500"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "label-md": ["14px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0A0A0B;
+            color: #e5e2e3;
+        }
+        .glass {
+            background: rgba(26, 26, 30, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-edge {
+            border: 1px solid transparent;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%) border-box;
+            -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+        .neon-glow:hover {
+            box-shadow: 0px 0px 20px #D800FF;
+        }
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.33); opacity: 1; }
+            80%, 100% { transform: scale(1.5); opacity: 0; }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #f7acff;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md selection:bg-primary selection:text-on-primary">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-0 z-50 flex items-center justify-between px-xl w-full h-20 bg-surface/60 backdrop-blur-lg border-b border-white/10">
+<div class="flex items-center gap-md">
+<span class="font-display-lg text-display-lg font-black text-primary tracking-tighter">Pulse</span>
+</div>
+<nav class="hidden md:flex items-center gap-xl">
+<a class="font-label-md text-label-md text-primary border-b-2 border-primary pb-1 cursor-pointer active:opacity-80" href="#">Discover</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all cursor-pointer active:opacity-80" href="#">Premium</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all cursor-pointer active:opacity-80" href="#">Support</a>
+</nav>
+<div class="flex items-center gap-lg">
+<div class="hidden md:flex items-center bg-surface-container rounded-full px-md py-xs border border-white/5">
+<span class="material-symbols-outlined text-on-surface-variant mr-xs">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-label-md w-40" placeholder="Search friends..." type="text"/>
+</div>
+<button class="bg-primary-container text-on-primary-container font-label-md text-label-md px-lg py-sm rounded-full neon-glow transition-all active:scale-95">
+                Go Live
+            </button>
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-all cursor-pointer" data-icon="settings">settings</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-all cursor-pointer" data-icon="help">help</span>
+<img class="w-10 h-10 rounded-full border-2 border-primary/30 object-cover" data-alt="A sophisticated cinematic headshot of a diverse young professional with stylized neon backlighting in shades of electric purple and cyan. The lighting accentuates sharp facial features and modern hair, reflecting a high-tech digital persona. The background is a blurred charcoal texture suggesting an urban cyberpunk setting at night." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0PM_j22H0tRcjCEoShGqvqe1duuZtllYFcmkSnzQmMJvYw7v-GbkI9JtJxiw2KkprHR0rc08mLJeT4ip__YGMhVChMhce5Cjm_ZG97ONRJFinQIkYNw1vA2m7GhbjDt2j1wk3e3ZfJZQj4aCpfeEmzVVhRQejhWGKAKS6iBoHkgOMbDTR9dGrHPn0-V6RuIgoyLPe9Y95eG07HeXcwPgHhPDKxL3eaxlktZRjrr9URDNL8qDcXhnb1LJ8gRVN7F63MzGBG1tX7hQ"/>
+</div>
+</div>
+</header>
+<div class="flex pt-20 h-screen overflow-hidden">
+<!-- SideNavBar / Filter Sidebar -->
+<aside class="fixed left-0 top-20 h-[calc(100vh-80px)] w-72 flex flex-col p-lg bg-surface/80 backdrop-blur-xl border-r border-white/10 shadow-[0_0_12px_rgba(247,172,255,0.2)] overflow-y-auto custom-scrollbar">
+<div class="mb-xl">
+<h2 class="font-headline-md text-headline-md text-primary mb-xs">Pulse</h2>
+<p class="font-label-md text-label-md text-on-surface-variant opacity-70">Global Discovery</p>
+</div>
+<nav class="space-y-sm mb-xl">
+<a class="flex items-center gap-md p-md rounded-lg text-secondary-fixed font-bold border-l-4 border-secondary-fixed bg-secondary-fixed/10 transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-label-md text-label-md">Messages</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-md text-label-md">Friends</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-primary transition-all duration-300 ease-in-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-label-md text-label-md">Notifications</span>
+</a>
+</nav>
+<div class="space-y-lg border-t border-white/5 pt-lg">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant mb-md block">Gender</label>
+<div class="flex flex-wrap gap-xs">
+<button class="px-md py-xs rounded-full glass text-label-sm font-label-sm border-secondary-fixed text-secondary-fixed border-2">All</button>
+<button class="px-md py-xs rounded-full glass text-label-sm font-label-sm text-on-surface-variant hover:text-primary transition-all">Female</button>
+<button class="px-md py-xs rounded-full glass text-label-sm font-label-sm text-on-surface-variant hover:text-primary transition-all">Male</button>
+</div>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant mb-md block">Country</label>
+<select class="w-full glass bg-surface-container rounded-lg p-md text-label-sm font-label-sm text-on-surface outline-none focus:border-secondary-fixed border border-white/10">
+<option>Global (All)</option>
+<option>United States</option>
+<option>United Kingdom</option>
+<option>South Korea</option>
+<option>Japan</option>
+</select>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant mb-md block">Interests</label>
+<div class="flex flex-wrap gap-xs">
+<span class="px-md py-xs rounded-full bg-surface-container-high border border-white/5 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Gaming</span>
+<span class="px-md py-xs rounded-full bg-surface-container-high border border-white/10 text-[10px] uppercase font-bold tracking-widest text-primary">Music</span>
+<span class="px-md py-xs rounded-full bg-surface-container-high border border-white/5 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Tech</span>
+<span class="px-md py-xs rounded-full bg-surface-container-high border border-white/5 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Art</span>
+</div>
+</div>
+<div class="p-md rounded-xl bg-gradient-to-br from-primary/20 to-secondary-fixed/10 border border-primary/30 mt-auto">
+<div class="flex items-center gap-sm mb-xs">
+<span class="material-symbols-outlined text-primary text-md" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-label-md text-primary font-bold">Pulse Premium</span>
+</div>
+<p class="text-[11px] text-on-surface-variant mb-md">Unlock gender filters &amp; HD video streaming.</p>
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-sm rounded-lg font-bold neon-glow transition-all">Start Matching</button>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-72 flex-1 p-xl overflow-y-auto custom-scrollbar bg-surface-dim relative">
+<!-- Hero Gradient Overlay -->
+<div class="absolute top-0 right-0 w-1/2 h-1/2 bg-primary/5 blur-[120px] pointer-events-none"></div>
+<div class="absolute bottom-0 left-0 w-1/2 h-1/2 bg-secondary-fixed/5 blur-[120px] pointer-events-none"></div>
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-xl relative z-10">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface mb-xs">Discovery</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Find people with similar vibes from around the world.</p>
+</div>
+<div class="flex items-center gap-md">
+<span class="text-label-md font-label-md text-on-surface-variant">Sort by:</span>
+<button class="glass px-lg py-sm rounded-full text-label-md font-label-md flex items-center gap-xs">
+                        Recent Activity
+                        <span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Discovery Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-lg relative z-10">
+<!-- User Card 1 -->
+<div class="group relative aspect-[3/4] rounded-2xl overflow-hidden glass shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover" data-alt="A stunning cinematic portrait of a young Japanese woman with long obsidian hair, smiling warmly while standing on a high-rise balcony in Tokyo at night. The city lights behind her are a beautiful bokeh of vibrant neons and deep purples. She wears a minimalist charcoal jacket that matches the premium aesthetic of the UI. The lighting is soft and flattering, highlighting her verified status." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_n1Q0CDe3eaLs_EzZbqdx5bNjUUVTx9Z-B5z_VJdFEb-PkGSoCBAOpdba0mcOMW2DxnDanyK5w1kaWs6t4uN9Aikf5VihIRwrfcapAT6YO52ZFnF8q1QrOsRjSRwMucItmKVNoqtdVTO1V43Q2nvxGBGiWz-cMCotScZnLwSSrQf7Hx-8M4lgOO9i2eqjoG7ky4cUWAWvqCLIHmQTBHd2LFu8AYfMV1OiXjjvosd2ptP3FPEDWSP2tODu1AyhJIcOpgoym729Ams"/>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+<div class="absolute top-md left-md flex items-center gap-sm">
+<div class="relative flex items-center justify-center">
+<div class="absolute w-3 h-3 bg-tertiary rounded-full pulse-ring"></div>
+<div class="w-2 h-2 bg-tertiary rounded-full relative z-10"></div>
+</div>
+<span class="bg-black/40 backdrop-blur-md px-md py-xs rounded-full text-[10px] font-bold text-white uppercase tracking-widest">Online</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 p-lg">
+<div class="flex items-center gap-xs mb-xs">
+<h3 class="font-headline-md text-on-surface truncate">Aimi, 23</h3>
+<span class="material-symbols-outlined text-secondary-fixed text-lg" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant text-label-sm font-label-sm mb-md">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                            Tokyo, JP
+                        </div>
+<div class="flex flex-wrap gap-xs opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">Music Production</span>
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">Travel</span>
+</div>
+</div>
+</div>
+<!-- User Card 2 -->
+<div class="group relative aspect-[3/4] rounded-2xl overflow-hidden glass shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of a charismatic Swedish man with athletic build and blonde hair, captured in a bright, modern studio setting with subtle electric purple accent lighting. He is laughing, looking away from the camera, conveying a spontaneous and electric energy. The photo quality is exceptionally high, resembling a professional HD video stream. The background is a clean, dark charcoal gray." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAloyDEY2hmMrZFm-4v-bvnz3b_Oh4D9001A5WKeNW9mzPdyHF_T--W3taVWaC-3cc0IMZJ2XE0nD30JOY3zpBMjMCcvlxZ76sIbfsoWglrzl8ythIhWF6OFEc4uAk2hhdaGhpNshFBqRb9rQY6zW216kHJq6eCD54rhokTiaiAtOeuGtCNd97922Oig1ym46rEIZdzYKToogOYqaeaJd6t3QhZH9B9BvdMoGG-_-aNFyj6Q2nqo-ArfKhFNUMTMI3shqNuDhCjX30"/>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+<div class="absolute top-md left-md">
+<span class="bg-primary/20 backdrop-blur-md border border-primary/30 px-md py-xs rounded-full text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-xs">
+<span class="material-symbols-outlined text-xs">auto_awesome</span>
+                            Trending
+                        </span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 p-lg">
+<div class="flex items-center gap-xs mb-xs">
+<h3 class="font-headline-md text-on-surface">Lukas, 26</h3>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant text-label-sm font-label-sm mb-md">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                            Stockholm, SE
+                        </div>
+<div class="flex flex-wrap gap-xs opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">Fitness</span>
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">Photography</span>
+</div>
+</div>
+</div>
+<!-- Premium Locked Card -->
+<div class="group relative aspect-[3/4] rounded-2xl overflow-hidden glass shadow-2xl flex flex-col items-center justify-center p-xl text-center border-dashed border-2 border-primary/40 bg-primary/5">
+<div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-lg">
+<span class="material-symbols-outlined text-primary text-4xl">lock</span>
+</div>
+<h3 class="font-headline-md text-on-surface mb-md">Unlock More</h3>
+<p class="text-label-sm text-on-surface-variant mb-xl leading-relaxed">Upgrade to Premium to see matches filtered by your specific gender preferences.</p>
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-xl font-bold neon-glow transition-all shadow-[0_0_20px_rgba(216,0,255,0.4)]">Go Premium</button>
+</div>
+<!-- User Card 3 -->
+<div class="group relative aspect-[3/4] rounded-2xl overflow-hidden glass shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover" data-alt="A close-up portrait of a vibrant woman from Brazil with curly hair and sparkling eyes, set against a backdrop of a colorful urban mural at dusk. The mural features bold, abstract shapes in cyan and magenta. Her expression is welcoming and friendly, illuminated by the warm, late afternoon sun mixed with soft artificial street lights. She embodies the electric and spontaneous brand personality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXCip_r8_tQzdyy3VxXOEtLymWMvV2Ip8NISevODMlC0qxLSnKLs-TV6-9Hd2UbRESvwHSCrUOplemiFBFvYDraMtz-eqyWPl2B5rJuV2mCuyRxxBtJi3dCZ3JfQNeLaNnhuRHEtVzroJH-htISjZmxi6QuY_Uewm24Tw2llDm8FBzqdHKpv3HTWDHu6Ox6VRgCgaeG8eIDb41STMRz9OsWz5eWM3AR7opUYoL2c7ib0OXLkimBu0yvLzSq_j-FN-CZmxMyzoDtSk"/>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+<div class="absolute top-md right-md">
+<span class="bg-black/60 backdrop-blur-md px-md py-xs rounded-full text-[10px] font-bold text-white flex items-center gap-xs">
+<span class="material-symbols-outlined text-xs text-secondary-fixed">language</span>
+                            PT, EN
+                        </span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 p-lg">
+<div class="flex items-center gap-xs mb-xs">
+<h3 class="font-headline-md text-on-surface">Elena, 21</h3>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant text-label-sm font-label-sm mb-md">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                            Rio de Janeiro, BR
+                        </div>
+<div class="flex flex-wrap gap-xs opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">Dancing</span>
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">Cooking</span>
+</div>
+</div>
+</div>
+<!-- User Card 4 -->
+<div class="group relative aspect-[3/4] rounded-2xl overflow-hidden glass shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of a tech-savvy young man with glasses and a stylish undercut, sitting in a high-end gaming chair with a glowing dual-monitor setup in the background showing complex digital code. The room is bathed in a soft cyan and purple radial glow. The atmosphere is calm and professional, reflecting a safe and addictive connection environment. High-contrast colors emphasize the modern UI style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBio7afGJh-Ond6i4Uk4lpgwnKiYUKIKX09R2_jT80qdqp9zjiSTCE09-DSjmtK-jwoAyXKDbuvt3pHD98qdT4QQdB1lcX4QMhRySO0jHkOpIjWbtiTlZ2vYxBc0zZ8lM93sEtqOf__H8KA7-ydoh5qK7Vlp_7ZYIpO6Dvcyh7TXI1IkZV5-8-y0NYYj4q5kIZjW8GufZabc35BEvvS4DbaW3Iyq9JJWdO-TYiDMSCQGXELDtZD8EclsNcAdUBgDYT8AXrgZAIrzRk"/>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+<div class="absolute bottom-0 left-0 right-0 p-lg">
+<div class="flex items-center gap-xs mb-xs">
+<h3 class="font-headline-md text-on-surface">Marcus, 25</h3>
+<span class="material-symbols-outlined text-yellow-400 text-lg" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant text-label-sm font-label-sm mb-md">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                            London, UK
+                        </div>
+<div class="flex flex-wrap gap-xs opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">AI</span>
+<span class="px-md py-xs rounded-full glass border-white/10 text-[10px] text-white">E-sports</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Premium Upsell Banner -->
+<section class="mt-xl relative overflow-hidden rounded-3xl p-xl glass border-primary/20">
+
+<div class="relative z-10 flex flex-col md:flex-row items-center justify-between gap-xl">
+<div class="max-w-2xl">
+<div class="inline-block px-md py-xs rounded-full bg-primary/20 border border-primary/30 mb-lg">
+<span class="text-[10px] font-black uppercase tracking-widest text-primary">Limited Offer</span>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-white mb-md">Pulse Premium Experience</h2>
+<p class="font-body-lg text-on-surface-variant mb-xl">Elevate your connections with advanced targeting and cinematic streaming quality. See who's truly matching your vibe.</p>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md mb-xl">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-secondary-fixed/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary-fixed" data-icon="female">female</span>
+</div>
+<div>
+<h4 class="font-label-md text-white font-bold">Gender Preference</h4>
+<p class="text-[11px] text-on-surface-variant">Find exactly who you're looking for.</p>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="hd">hd</span>
+</div>
+<div>
+<h4 class="font-label-md text-white font-bold">HD Video Quality</h4>
+<p class="text-[11px] text-on-surface-variant">Crystal clear 1080p discovery.</p>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-tertiary-fixed/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary-fixed" data-icon="public">public</span>
+</div>
+<div>
+<h4 class="font-label-md text-white font-bold">Global Travel</h4>
+<p class="text-[11px] text-on-surface-variant">Match with any country instantly.</p>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-yellow-400" data-icon="ad_off">ad_off</span>
+</div>
+<div>
+<h4 class="font-label-md text-white font-bold">Ad-Free Pulse</h4>
+<p class="text-[11px] text-on-surface-variant">No interruptions, just discovery.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="w-full md:w-80 p-lg glass-edge bg-white/5 rounded-2xl flex flex-col gap-lg items-center border border-white/10 shadow-2xl">
+<div class="text-center">
+<span class="text-on-surface-variant font-label-sm block mb-xs">Annual Plan</span>
+<div class="flex items-baseline justify-center gap-xs">
+<span class="text-headline-lg font-black text-white">$9.99</span>
+<span class="text-on-surface-variant text-label-md">/mo</span>
+</div>
+</div>
+<ul class="w-full space-y-md">
+<li class="flex items-center gap-md text-label-sm text-on-surface">
+<span class="material-symbols-outlined text-tertiary text-sm">check_circle</span>
+                                Unlimited Matching
+                            </li>
+<li class="flex items-center gap-md text-label-sm text-on-surface">
+<span class="material-symbols-outlined text-tertiary text-sm">check_circle</span>
+                                Premium Badge
+                            </li>
+<li class="flex items-center gap-md text-label-sm text-on-surface">
+<span class="material-symbols-outlined text-tertiary text-sm">check_circle</span>
+                                Priority Support
+                            </li>
+</ul>
+<button class="w-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-headline-md text-[16px] py-md rounded-xl neon-glow transition-all active:scale-95">Upgrade Now</button>
+<p class="text-[10px] text-on-surface-variant text-center opacity-60">Cancel anytime. Terms apply.</p>
+</div>
+</div>
+</section>
+</main>
+</div>
+<!-- Mobile Navigation (BottomNavBar) -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/80 backdrop-blur-xl flex items-center justify-around px-md z-50 border-t border-white/5">
+<a class="flex flex-col items-center gap-xs text-primary" href="#">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="text-[10px] font-bold">Home</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+<span class="text-[10px]">Chat</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-lg">group</span>
+<span class="text-[10px]">Friends</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-lg">person</span>
+<span class="text-[10px]">Me</span>
+</a>
+</nav>
+<script>
+        // Micro-interactions and subtle effects
+        document.querySelectorAll('.group').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                const img = card.querySelector('img');
+                if(img) img.style.transform = 'scale(1.1)';
+                img.style.transition = 'transform 0.8s ease-out';
+            });
+            card.addEventListener('mouseleave', () => {
+                const img = card.querySelector('img');
+                if(img) img.style.transform = 'scale(1)';
+            });
+        });
+
+        // Floating elements click effect
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('a')) {
+                const ripple = document.createElement('div');
+                ripple.className = 'fixed pointer-events-none rounded-full bg-primary/20 w-8 h-8 -translate-x-1/2 -translate-y-1/2 animate-ping z-[100]';
+                ripple.style.left = `${e.clientX}px`;
+                ripple.style.top = `${e.clientY}px`;
+                document.body.appendChild(ripple);
+                setTimeout(() => ripple.remove(), 600);
+            }
+        });
+    </script>
+</body></html>
