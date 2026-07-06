@@ -1,0 +1,103 @@
+<div class="flex min-h-screen w-full overflow-hidden">
+  <!-- Left Section: Visual Kinetic Brand Side -->
+  <section class="hidden lg:flex relative w-1/2 flex-col justify-between p-xl overflow-hidden" pulseShaderBg>
+    <!-- Dark overlay so text stays readable over the shader -->
+    <div class="absolute inset-0 bg-background/60 z-0 pointer-events-none"></div>
+    <div class="relative z-20 flex items-center gap-sm">
+      <span class="font-display text-display-lg font-black text-primary tracking-tighter kinetic-text uppercase">Pulse</span>
+    </div>
+    <div class="relative z-20 max-w-lg">
+      <h1 class="font-headline text-headline-lg text-white mb-md">
+        Connect with the <span class="text-primary italic">Pulse</span> of the world.
+      </h1>
+      <p class="font-body text-body-lg text-on-surface-variant opacity-80">
+        Spontaneous digital face-to-face interactions. Safe, fast, and electric.
+      </p>
+    </div>
+    <div class="relative z-20">
+      <div class="inline-flex items-center glass-panel px-md py-sm rounded-full border border-white/10 gap-sm">
+        <span class="w-2 h-2 bg-tertiary rounded-full pulse-animation"></span>
+        <span class="font-label text-label-md text-white">Join 100k+ users online right now</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Right Section: Auth UI -->
+  <section class="flex flex-col w-full lg:w-1/2 items-center justify-center p-lg relative bg-background">
+    <div class="lg:hidden absolute top-10 left-1/2 -translate-x-1/2 text-center">
+      <span class="font-display text-display-lg font-black text-primary tracking-tighter">Pulse</span>
+    </div>
+    <div class="w-full max-w-md space-y-lg">
+      <div class="flex flex-col space-y-sm text-center lg:text-left">
+        <h2 class="font-headline text-headline-lg text-on-surface">{{ mode === 'login' ? 'Welcome back' : 'Create account' }}</h2>
+        <p class="font-body text-body-md text-on-surface-variant">{{ mode === 'login' ? 'Enter your details to access your global discovery.' : 'Join millions connecting across the globe.' }}</p>
+      </div>
+
+      <!-- Tab Toggle -->
+      <div class="flex p-xs bg-surface-container rounded-xl border border-white/5 shadow-inner">
+        <button
+          (click)="mode = 'login'"
+          [class]="mode === 'login' ? 'bg-surface-variant text-white shadow-lg' : 'text-on-surface-variant hover:text-white'"
+          class="flex-1 py-sm rounded-lg font-label text-label-md transition-all duration-300">
+          Login
+        </button>
+        <button
+          (click)="mode = 'register'"
+          [class]="mode === 'register' ? 'bg-surface-variant text-white shadow-lg' : 'text-on-surface-variant hover:text-white'"
+          class="flex-1 py-sm rounded-lg font-label text-label-md transition-all duration-300">
+          Sign Up
+        </button>
+      </div>
+
+      <!-- Form -->
+      <form class="space-y-md">
+        <div *ngIf="mode === 'register'" class="space-y-sm">
+          <label class="font-label text-label-md text-on-surface-variant px-1">Display Name</label>
+          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            placeholder="Your name" type="text"/>
+        </div>
+        <div class="space-y-sm">
+          <label class="font-label text-label-md text-on-surface-variant px-1">Email or Phone</label>
+          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            placeholder="name@email.com" type="text"/>
+        </div>
+        <div class="space-y-sm">
+          <div class="flex justify-between items-center px-1">
+            <label class="font-label text-label-md text-on-surface-variant">Password</label>
+            <a *ngIf="mode === 'login'" class="text-secondary font-label text-label-sm hover:underline" href="#">Forgot?</a>
+          </div>
+          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            placeholder="••••••••" type="password"/>
+        </div>
+        <button class="w-full h-14 bg-primary text-on-primary font-headline text-headline-md rounded-xl neon-glow-primary transition-all hover:brightness-110 active:scale-[0.98] mt-lg" type="submit">
+          {{ mode === 'login' ? 'Continue' : 'Join Pulse' }}
+        </button>
+      </form>
+
+      <!-- Divider -->
+      <div class="relative flex items-center py-sm">
+        <div class="flex-grow border-t border-white/10"></div>
+        <span class="flex-shrink mx-4 font-label text-label-sm text-outline/60">OR CONTINUE WITH</span>
+        <div class="flex-grow border-t border-white/10"></div>
+      </div>
+
+      <!-- Social Auth -->
+      <div class="grid grid-cols-2 gap-md">
+        <button class="flex items-center justify-center gap-sm h-14 glass-panel rounded-xl hover:bg-white/5 transition-colors font-label text-label-md border border-white/10">
+          <span class="material-symbols-outlined text-on-surface">open_in_new</span>
+          Google
+        </button>
+        <button class="flex items-center justify-center gap-sm h-14 glass-panel rounded-xl hover:bg-white/5 transition-colors font-label text-label-md border border-white/10">
+          <span class="material-symbols-outlined text-on-surface">smartphone</span>
+          Apple
+        </button>
+      </div>
+
+      <p class="text-center font-label text-label-sm text-on-surface-variant/40 pt-sm">
+        By continuing, you agree to Pulse's
+        <a class="text-on-surface-variant/60 hover:text-primary underline" href="#">Terms</a> and
+        <a class="text-on-surface-variant/60 hover:text-primary underline" href="#">Privacy Policy</a>.
+      </p>
+    </div>
+  </section>
+</div>

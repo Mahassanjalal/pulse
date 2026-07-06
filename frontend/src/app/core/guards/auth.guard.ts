@@ -1,0 +1,49 @@
+import { Injectable } from '@angular/core';
+import { CanActivate, Router, UrlTree } from '@angular/router';
+import { AuthService } from '@core/services/auth.service';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthGuard implements CanActivate {
+  constructor(private authService: AuthService, private router: Router) {}
+
+  canActivate(): boolean {
+    if (this.authService.isAuthenticated()) {
+      return true;
+    }
+    this.router.navigate(['/login']);
+    return false;
+  }
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class GuestGuard implements CanActivate {
+  constructor(private authService: AuthService, private router: Router) {}
+
+  canActivate(): boolean {
+    if (!this.authService.isAuthenticated()) {
+      return true;
+    }
+    this.router.navigate(['/dashboard']);
+    return false;
+  }
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class PremiumGuard implements CanActivate {
+  constructor(private authService: AuthService, private router: Router) {}
+
+  canActivate(): boolean {
+    const user = this.authService.getCurrentUser();
+    if (user && user.isPremium) {
+      return true;
+    }
+    this.router.navigate(['/premium']);
+    return false;
+  }
+}

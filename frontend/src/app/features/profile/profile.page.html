@@ -1,0 +1,181 @@
+<!-- Hero Section -->
+<section class="relative h-96 w-full overflow-hidden" pulseParticlesBg>
+  <div class="absolute inset-0 bg-cover bg-center"
+    style="background-image: url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&q=80')"></div>
+  <div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent"></div>
+  <div class="absolute bottom-0 left-0 w-full px-xl pb-lg flex flex-col md:flex-row items-end gap-lg">
+    <div class="relative group">
+      <div class="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-surface overflow-hidden shadow-2xl relative z-10">
+        <img class="w-full h-full object-cover" src="https://i.pravatar.cc/200?img=7" alt="Profile" />
+      </div>
+      <div class="absolute bottom-1 right-1 z-20 bg-tertiary w-8 h-8 rounded-full flex items-center justify-center border-2 border-surface">
+        <span class="material-symbols-outlined text-on-tertiary text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+      </div>
+    </div>
+    <div class="flex-1 pb-md">
+      <div class="flex flex-wrap items-center gap-sm mb-xs">
+        <h2 class="font-headline text-headline-lg text-on-surface tracking-tight">Alex Rivera</h2>
+        <span class="bg-secondary-fixed text-on-secondary-fixed px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Verified</span>
+        <span class="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Premium</span>
+      </div>
+      <p class="text-on-surface-variant font-body text-body-lg flex items-center gap-xs">
+        <span class="material-symbols-outlined text-primary text-base">location_on</span>
+        Tokyo, Japan · 24 years old
+      </p>
+    </div>
+    <div class="flex gap-md mb-md">
+      <button class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
+        <span class="material-symbols-outlined">favorite</span>
+        Favorite
+      </button>
+      <button class="bg-primary text-on-primary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold neon-glow-primary active:scale-95 transition-all">
+        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
+        Message
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Bento Grid Layout -->
+<div class="px-xl mt-lg grid grid-cols-1 lg:grid-cols-12 gap-lg pb-xl">
+  <!-- Left Column: Bio & Stats -->
+  <div class="lg:col-span-8 flex flex-col gap-lg">
+    <!-- Bio -->
+    <div class="glass-panel p-lg rounded-2xl border border-white/10">
+      <h3 class="font-headline text-headline-md text-primary mb-md">About</h3>
+      <p class="text-on-surface-variant leading-relaxed text-body-lg">
+        Digital nomad and street photographer exploring the intersection of technology and human connection. 📸
+        Currently on a quest to find the best ramen in Shibuya. Passionate about real-time interactions,
+        electronic music, and late-night gaming sessions.
+      </p>
+      <div class="mt-lg flex flex-wrap gap-sm">
+        <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-secondary-fixed/40 text-secondary-fixed">#Photography</span>
+        <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant">#Travel</span>
+        <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant">#Cyberpunk</span>
+        <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant">#Techno</span>
+        <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant">#E-Sports</span>
+        <button class="bg-surface-container-low px-md py-sm rounded-full text-label-md border border-dashed border-white/20 text-on-surface-variant/50 hover:border-primary hover:text-primary transition-colors">
+          + Add Interest
+        </button>
+      </div>
+    </div>
+
+    <!-- Social Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+      <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-primary/40 transition-colors">
+        <span class="material-symbols-outlined text-primary text-4xl mb-sm group-hover:scale-110 transition-transform">forum</span>
+        <span class="font-headline text-headline-md text-on-surface">1.2k</span>
+        <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Conversations</span>
+      </div>
+      <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-secondary-fixed/40 transition-colors">
+        <span class="material-symbols-outlined text-secondary-fixed text-4xl mb-sm group-hover:scale-110 transition-transform">group_add</span>
+        <span class="font-headline text-headline-md text-on-surface">842</span>
+        <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Friends</span>
+      </div>
+      <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-tertiary/40 transition-colors">
+        <span class="material-symbols-outlined text-tertiary text-4xl mb-sm group-hover:scale-110 transition-transform">calendar_month</span>
+        <span class="font-headline text-headline-md text-on-surface">Dec 2022</span>
+        <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Joined Pulse</span>
+      </div>
+    </div>
+
+    <!-- Activity Timeline -->
+    <div class="glass-panel p-lg rounded-2xl border border-white/10 overflow-hidden relative min-h-[200px]">
+      <h3 class="font-headline text-headline-md text-primary mb-md">Recent Activity</h3>
+      <div class="relative pl-lg border-l-2 border-primary/20 space-y-lg">
+        <div class="flex gap-md items-start">
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center -ml-[calc(1rem+1px)] flex-shrink-0">
+            <span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'FILL' 1;">videocam</span>
+          </div>
+          <div>
+            <p class="text-on-surface font-bold">Went Live</p>
+            <p class="text-on-surface-variant text-label-sm">2 hours ago in Tokyo Street Life</p>
+          </div>
+        </div>
+        <div class="flex gap-md items-start">
+          <div class="w-8 h-8 rounded-full bg-secondary-fixed flex items-center justify-center -ml-[calc(1rem+1px)] flex-shrink-0">
+            <span class="material-symbols-outlined text-on-secondary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">person_add</span>
+          </div>
+          <div>
+            <p class="text-on-surface font-bold">Added Friend</p>
+            <p class="text-on-surface-variant text-label-sm">6 hours ago · Connected with Sakura</p>
+          </div>
+        </div>
+        <div class="flex gap-md items-start">
+          <div class="w-8 h-8 rounded-full bg-tertiary flex items-center justify-center -ml-[calc(1rem+1px)] flex-shrink-0">
+            <span class="material-symbols-outlined text-on-tertiary text-sm" style="font-variation-settings: 'FILL' 1;">stars</span>
+          </div>
+          <div>
+            <p class="text-on-surface font-bold">Earned Achievement</p>
+            <p class="text-on-surface-variant text-label-sm">Yesterday · "World Traveler" badge unlocked</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Trust Score & Privacy -->
+  <div class="lg:col-span-4 flex flex-col gap-lg">
+    <!-- Trust Score Gauge -->
+    <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center">
+      <h3 class="font-headline text-headline-md text-primary mb-lg w-full text-left">Trust Score</h3>
+      <div class="relative w-40 h-40 flex items-center justify-center mb-md">
+        <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#2ae500" stroke-width="8"
+            stroke-dasharray="251.2" stroke-dashoffset="50" stroke-linecap="round"/>
+        </svg>
+        <div class="text-center z-10">
+          <p class="font-headline text-2xl font-bold text-tertiary">92</p>
+          <p class="text-label-sm text-on-surface-variant">/ 100</p>
+        </div>
+      </div>
+      <p class="font-label text-label-sm text-on-surface-variant">Excellent trust rating based on 1.2k interactions</p>
+    </div>
+
+    <!-- Privacy Settings -->
+    <div class="glass-panel p-lg rounded-2xl border border-white/10">
+      <h3 class="font-headline text-headline-md text-on-surface mb-md">Privacy</h3>
+      <div class="space-y-md">
+        <div class="flex items-center justify-between">
+          <span class="font-label text-label-md text-on-surface-variant">Show Online Status</span>
+          <div class="w-10 h-6 bg-tertiary rounded-full flex items-center pl-1 cursor-pointer">
+            <div class="w-4 h-4 bg-white rounded-full shadow ml-auto mr-1"></div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="font-label text-label-md text-on-surface-variant">Show Location</span>
+          <div class="w-10 h-6 bg-surface-container rounded-full flex items-center pl-1 cursor-pointer border border-white/10">
+            <div class="w-4 h-4 bg-on-surface-variant rounded-full shadow"></div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="font-label text-label-md text-on-surface-variant">Profile Discovery</span>
+          <div class="w-10 h-6 bg-tertiary rounded-full flex items-center pl-1 cursor-pointer">
+            <div class="w-4 h-4 bg-white rounded-full shadow ml-auto mr-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mutual Friends -->
+    <div class="glass-panel p-lg rounded-2xl border border-white/10">
+      <h3 class="font-headline text-headline-md text-on-surface mb-md">Mutual Friends</h3>
+      <div class="flex -space-x-3 mb-md">
+        <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
+          <img class="w-full h-full object-cover" src="https://i.pravatar.cc/60?img=10" alt="" />
+        </div>
+        <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
+          <img class="w-full h-full object-cover" src="https://i.pravatar.cc/60?img=12" alt="" />
+        </div>
+        <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
+          <img class="w-full h-full object-cover" src="https://i.pravatar.cc/60?img=15" alt="" />
+        </div>
+        <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center">
+          <span class="font-label text-label-sm text-on-surface-variant">+8</span>
+        </div>
+      </div>
+      <p class="font-label text-label-sm text-on-surface-variant">You and Alex share 11 mutual friends</p>
+    </div>
+  </div>
+</div>
