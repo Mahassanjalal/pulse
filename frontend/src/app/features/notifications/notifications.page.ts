@@ -29,7 +29,7 @@ interface DisplayNotification {
       </div>
 
       <div class="space-y-md">
-        <div *ngFor="let notif of notifications" class="glass-panel rounded-2xl p-lg border border-white/10 flex items-start gap-md cursor-pointer hover:bg-white/5 transition-all" [class.border-l-4]="notif.unread" [style.border-left-color]="notif.unread ? 'var(--color-primary)' : 'transparent'" (click)="markRead(notif)">
+        <div *ngFor="let notif of notifications" class="glass-panel rounded-2xl p-lg border border-white/10 flex items-start gap-md cursor-pointer hover:bg-white/5 transition-all group" [class.border-l-4]="notif.unread" [style.border-left-color]="notif.unread ? 'var(--color-primary)' : 'transparent'" (click)="markRead(notif)">
           <div class="w-12 h-12 rounded-full flex items-center justify-center shrink-0" [class]="notif.iconBg">
             <span class="material-symbols-outlined" [class]="notif.iconColor">{{ notif.icon }}</span>
           </div>
@@ -40,8 +40,15 @@ interface DisplayNotification {
             </div>
             <p class="text-sm text-on-surface-variant mt-1">{{ notif.message }}</p>
           </div>
-          <div *ngIf="notif.unread" class="w-2 h-2 rounded-full bg-primary shrink-0 mt-1"></div>
+          <div class="flex items-center gap-xs">
+            <div *ngIf="notif.unread" class="w-2 h-2 rounded-full bg-primary shrink-0"></div>
+            <button (click)="$event.stopPropagation(); deleteNotif(notif.id)" class="material-symbols-outlined text-body-md text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-error transition-all">close</button>
+          </div>
         </div>
+      </div>
+
+      <div *ngIf="hasMore" class="text-center mt-lg">
+        <button (click)="loadMore()" class="text-primary font-label-md hover:underline">Load More</button>
       </div>
 
       <div *ngIf="notifications.length === 0" class="text-center py-xl">
@@ -54,6 +61,7 @@ interface DisplayNotification {
 })
 export class NotificationsPageComponent implements OnInit {
   notifications: DisplayNotification[] = [];
+  hasMore = false;
 
   private iconMap: Record<string, { icon: string; iconBg: string; iconColor: string }> = {
     FRIEND_REQUEST: { icon: 'person_add', iconBg: 'bg-primary/20', iconColor: 'text-primary' },
@@ -81,7 +89,16 @@ export class NotificationsPageComponent implements OnInit {
         time: this.formatTime(n.timestamp),
         unread: n.unread,
       }));
+      this.hasMore = this.notificationService.hasMore;
     });
+  }
+
+  loadMore(): void {
+    this.notificationService.loadMore();
+  }
+
+  deleteNotif(id: string): void {
+    this.notificationService.deleteNotification(id);
   }
 
   markAllRead(): void {

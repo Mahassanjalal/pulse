@@ -1,7 +1,8 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, Subject, tap } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription, tap } from 'rxjs';
 import { environment } from '@env/environment';
+import { PresenceService } from './presence.service';
 
 export interface ChatMessage {
   id: string;
@@ -34,13 +35,33 @@ export interface Conversation {
 @Injectable({
   providedIn: 'root'
 })
-export class ChatService {
+export class ChatService implements OnDestroy {
   private conversations$ = new BehaviorSubject<Conversation[]>([]);
   private newMessage$ = new Subject<ChatMessage>();
   private typing$ = new Subject<{ matchId: string; isTyping: boolean }>();
   private messageRead$ = new Subject<{ messageId: string; chatId: string }>();
+  private presenceSub: Subscription;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private presenceService: PresenceService) {
+    this.presenceSub = this.presenceService.onPresenceChanged$.subscribe(({ userId, status }) => {
+      const current = this.conversations$.value;
+      let changed = false;
+      const updated = current.map(c => {
+        if (c.peer.id === userId && c.peer.status !== status) {
+          changed = true;
+          return { ...c, peer: { ...c.peer, status } };
+        }
+        return c;
+      });
+      if (changed) {
+        this.conversations$.next(updated);
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.presenceSub?.unsubscribe();
+  }
 
   get conversationsObs(): Observable<Conversation[]> {
     return this.conversations$.asObservable();
@@ -60,7 +81,13 @@ export class ChatService {
 
   loadConversations(): void {
     this.http.get<{ conversations: Conversation[] }>(`${environment.apiUrl}/chat/conversations`).subscribe({
-      next: (res) => this.conversations$.next(res.conversations),
+      next: (res) => {
+        this.conversations$.next(res.conversations);
+        const peerIds = res.conversations.map(c => c.peer.id);
+        if (peerIds.length > 0) {
+          this.presenceService.syncUsers(peerIds);
+        }
+      },
       error: () => this.conversations$.next([])
     });
   }

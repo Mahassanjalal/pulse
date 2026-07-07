@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Observable, Subject } from 'rxjs';
 import { environment } from '@env/environment';
@@ -6,10 +6,15 @@ import { environment } from '@env/environment';
 @Injectable({
   providedIn: 'root'
 })
-export class SocketService {
+export class SocketService implements OnDestroy {
   private socket: Socket | null = null;
   private connectionState$ = new Subject<'connected' | 'disconnected' | 'reconnecting'>();
   private eventHandlers = new Map<string, Subject<any>>();
+  private heartbeatInterval: any = null;
+
+  ngOnDestroy(): void {
+    this.stopHeartbeat();
+  }
 
   connect(): void {
     const token = localStorage.getItem('token');
@@ -24,8 +29,14 @@ export class SocketService {
       reconnectionAttempts: 10,
     });
 
-    this.socket.on('connect', () => this.connectionState$.next('connected'));
-    this.socket.on('disconnect', () => this.connectionState$.next('disconnected'));
+    this.socket.on('connect', () => {
+      this.connectionState$.next('connected');
+      this.startHeartbeat();
+    });
+    this.socket.on('disconnect', () => {
+      this.connectionState$.next('disconnected');
+      this.stopHeartbeat();
+    });
     this.socket.on('reconnect_attempt', () => this.connectionState$.next('reconnecting'));
 
     const events = [
@@ -33,7 +44,7 @@ export class SocketService {
       'webrtc_offer', 'webrtc_answer', 'webrtc_candidate',
       'match_message', 'match_message_sent', 'peer_typing',
       'friend_request_notification', 'friend_request_received', 'friend_request_accepted', 'friend_added',
-      'notification',
+      'notification', 'presence_changed', 'presence_sync_result', 'pong',
     ];
 
     events.forEach(event => {
@@ -44,10 +55,29 @@ export class SocketService {
   }
 
   disconnect(): void {
+    this.stopHeartbeat();
     this.socket?.disconnect();
     this.socket = null;
     this.eventHandlers.forEach(s => s.complete());
     this.eventHandlers.clear();
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      this.emit('heartbeat');
+    }, 30000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  requestPresenceSync(userIds: string[]): void {
+    this.emit('presence_sync', { userIds });
   }
 
   on(event: string): Observable<any> {

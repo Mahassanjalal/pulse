@@ -5,7 +5,7 @@
     <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-xl">
       <div class="flex items-center gap-sm bg-tertiary/10 border border-tertiary/20 px-md py-xs rounded-full mb-md">
         <div class="w-2 h-2 rounded-full bg-tertiary pulse-animation"></div>
-        <span class="text-tertiary font-label-md text-label-md uppercase tracking-widest">Live: 124,592 Matching Now</span>
+        <span class="text-tertiary font-label-md text-label-md uppercase tracking-widest">Live: {{ onlineCount | number }} Matching Now</span>
       </div>
       <h2 class="font-display text-display-lg text-on-surface drop-shadow-2xl mb-md">Ready for the unexpected?</h2>
       <p class="font-body text-body-lg text-on-surface-variant max-w-xl mb-xl">Connect with someone new instantly. Our matching engine pairs you with global discoverers based on shared vibes.</p>
@@ -34,64 +34,28 @@
         <a class="text-primary font-label text-label-md hover:underline" routerLink="/discover">View All</a>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
-        <!-- User Card 1 -->
-        <div class="relative group aspect-[3/4] rounded-2xl overflow-hidden glass-panel border border-white/10 cursor-pointer transition-all duration-300"
+        <div *ngFor="let user of trending" class="relative group aspect-[3/4] rounded-2xl overflow-hidden glass-panel border border-white/10 cursor-pointer transition-all duration-300"
           (mouseenter)="onCardEnter($any($event.currentTarget))"
-          (mouseleave)="onCardLeave($any($event.currentTarget))">
-          <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style="background-image: url('https://i.pravatar.cc/400?img=1')"></div>
+          (mouseleave)="onCardLeave($any($event.currentTarget))"
+          (click)="viewProfile(user.id)">
+          <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" [style.background-image]="'url(' + (user.profilePicture || 'https://i.pravatar.cc/400?img=' + (trending.indexOf(user) + 1)) + ')'"></div>
           <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
           <div class="absolute top-4 left-4 bg-tertiary px-sm py-xs rounded-lg flex items-center gap-xs">
             <span class="w-1.5 h-1.5 bg-white rounded-full pulse-animation"></span>
             <span class="text-[10px] font-bold text-on-tertiary">LIVE</span>
           </div>
-          <div class="absolute top-4 right-4 text-secondary">
+          <div *ngIf="user.isVerified" class="absolute top-4 right-4 text-secondary">
             <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">verified</span>
           </div>
           <div class="absolute bottom-0 left-0 right-0 p-lg">
-            <h4 class="font-headline text-headline-md text-white mb-xs">Aria V.</h4>
+            <h4 class="font-headline text-headline-md text-white mb-xs">{{ user.displayName }}</h4>
             <div class="flex gap-xs overflow-hidden">
-              <span class="bg-surface/60 backdrop-blur-md px-sm py-1 rounded-full text-[10px] text-secondary border border-secondary/30">#Music</span>
-              <span class="bg-surface/60 backdrop-blur-md px-sm py-1 rounded-full text-[10px] text-secondary border border-secondary/30">#Design</span>
+              <span *ngFor="let interest of (user.interests ? (user.interests | slice:0:2) : [])" class="bg-surface/60 backdrop-blur-md px-sm py-1 rounded-full text-[10px] text-secondary border border-secondary/30">#{{ interest }}</span>
             </div>
           </div>
         </div>
-
-        <!-- User Card 2 -->
-        <div class="relative group aspect-[3/4] rounded-2xl overflow-hidden glass-panel border border-white/10 cursor-pointer transition-all duration-300"
-          (mouseenter)="onCardEnter($any($event.currentTarget))"
-          (mouseleave)="onCardLeave($any($event.currentTarget))">
-          <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style="background-image: url('https://i.pravatar.cc/400?img=5')"></div>
-          <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
-          <div class="absolute top-4 left-4 bg-tertiary px-sm py-xs rounded-lg flex items-center gap-xs">
-            <span class="w-1.5 h-1.5 bg-white rounded-full pulse-animation"></span>
-            <span class="text-[10px] font-bold text-on-tertiary">LIVE</span>
-          </div>
-          <div class="absolute bottom-0 left-0 right-0 p-lg">
-            <h4 class="font-headline text-headline-md text-white mb-xs">Leo Jax</h4>
-            <div class="flex gap-xs">
-              <span class="bg-surface/60 backdrop-blur-md px-sm py-1 rounded-full text-[10px] text-secondary border border-secondary/30">#Gaming</span>
-              <span class="bg-surface/60 backdrop-blur-md px-sm py-1 rounded-full text-[10px] text-secondary border border-secondary/30">#Chat</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- User Card 3 -->
-        <div class="relative group aspect-[3/4] rounded-2xl overflow-hidden glass-panel border border-white/10 cursor-pointer transition-all duration-300"
-          (mouseenter)="onCardEnter($any($event.currentTarget))"
-          (mouseleave)="onCardLeave($any($event.currentTarget))">
-          <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style="background-image: url('https://i.pravatar.cc/400?img=9')"></div>
-          <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
-          <div class="absolute top-4 left-4 bg-tertiary px-sm py-xs rounded-lg flex items-center gap-xs">
-            <span class="w-1.5 h-1.5 bg-white rounded-full pulse-animation"></span>
-            <span class="text-[10px] font-bold text-on-tertiary">LIVE</span>
-          </div>
-          <div class="absolute bottom-0 left-0 right-0 p-lg">
-            <h4 class="font-headline text-headline-md text-white mb-xs">Chloe S.</h4>
-            <div class="flex gap-xs">
-              <span class="bg-surface/60 backdrop-blur-md px-sm py-1 rounded-full text-[10px] text-secondary border border-secondary/30">#Travel</span>
-              <span class="bg-surface/60 backdrop-blur-md px-sm py-1 rounded-full text-[10px] text-secondary border border-secondary/30">#Vlog</span>
-            </div>
-          </div>
+        <div *ngIf="trending.length === 0" class="col-span-full text-center py-xl text-on-surface-variant text-body-md">
+          No trending users right now. Be the first!
         </div>
       </div>
     </div>
@@ -118,7 +82,10 @@
             <div class="w-8 h-8 rounded-full bg-surface-variant border-2 border-surface flex items-center justify-center"><span class="text-xs font-bold text-on-surface-variant">S</span></div>
           </div>
         </div>
-        <button class="w-full bg-secondary-container text-on-secondary-container py-sm rounded-xl font-label text-label-md neon-glow-cyan hover:brightness-110 active:scale-95 transition-all">Claim Daily Gems ✨</button>
+        <button (click)="claimDailyReward()" [disabled]="claimDisabled" class="w-full bg-secondary-container text-on-secondary-container py-sm rounded-xl font-label text-label-md neon-glow-cyan hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+          {{ claimSuccess ? 'Claimed! +10 Gems' : 'Claim Daily Gems ✨' }}
+        </button>
+        <p *ngIf="claimError" class="text-error text-label-sm text-center">{{ claimError }}</p>
       </div>
 
       <!-- Quick Friends -->

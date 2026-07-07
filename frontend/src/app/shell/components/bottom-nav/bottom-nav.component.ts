@@ -1,6 +1,8 @@
 import { Component } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
+import { NotificationService } from '../../../core/services/notification.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'pulse-bottom-nav',
@@ -10,7 +12,10 @@ import { filter } from 'rxjs/operators';
          [routerLink]="item.route"
          class="bottom-nav-item"
          [class.active]="isActive(item.route)">
-        <span class="material-symbols-outlined text-[22px]" [class]="isActive(item.route) ? 'text-primary' : ''">{{ item.icon }}</span>
+        <div class="relative">
+          <span class="material-symbols-outlined text-[22px]" [class]="isActive(item.route) ? 'text-primary' : ''">{{ item.icon }}</span>
+          <span *ngIf="item.badge && unreadCount > 0" class="absolute -top-1 -right-2 min-w-[16px] h-[16px] bg-error text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 border border-surface">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+        </div>
         <span class="text-[10px] mt-0.5">{{ item.label }}</span>
       </a>
       <a routerLink="/video" class="flex flex-col items-center -mt-5">
@@ -38,20 +43,30 @@ import { filter } from 'rxjs/operators';
 })
 export class BottomNavComponent {
   currentUrl = '/dashboard';
+  unreadCount = 0;
 
   navItems = [
-    { icon: 'home', label: 'Home', route: '/dashboard' },
-    { icon: 'explore', label: 'Explore', route: '/discover' },
-    { icon: 'chat', label: 'Messages', route: '/messages' },
-    { icon: 'person', label: 'Profile', route: '/profile' },
+    { icon: 'home', label: 'Home', route: '/dashboard', badge: false },
+    { icon: 'explore', label: 'Explore', route: '/discover', badge: false },
+    { icon: 'chat', label: 'Messages', route: '/messages', badge: false },
+    { icon: 'notifications', label: 'Alerts', route: '/notifications', badge: true },
+    { icon: 'person', label: 'Profile', route: '/profile', badge: false },
   ];
 
-  constructor(private router: Router) {
+  constructor(
+    private router: Router,
+    private notificationService: NotificationService,
+    private authService: AuthService
+  ) {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
       this.currentUrl = event.urlAfterRedirects || event.url;
     });
+    this.notificationService.unreadCount$.subscribe(count => {
+      this.unreadCount = count;
+    });
+    this.notificationService.loadNotifications();
   }
 
   isActive(path: string): boolean {

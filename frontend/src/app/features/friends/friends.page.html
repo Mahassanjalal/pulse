@@ -97,6 +97,25 @@
         </div>
       </div>
 
+      <!-- Sent Requests -->
+      <div *ngIf="sentRequests.length > 0" class="glass-panel p-lg rounded-2xl border border-white/10">
+        <h3 class="font-headline text-headline-md text-on-surface mb-md">Sent Requests</h3>
+        <div class="space-y-md">
+          <div *ngFor="let req of sentRequests" class="flex items-center gap-md p-md bg-white/5 rounded-xl border border-white/5">
+            <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+              <img class="w-full h-full object-cover" [src]="req.toUser?.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="req.toUser?.displayName" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-label text-label-md text-on-surface truncate">{{ req.toUser?.displayName }}</p>
+              <p class="font-label text-label-sm text-on-surface-variant">{{ req.toUser?.country || 'Pending' }}</p>
+            </div>
+            <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-error/20 hover:text-error transition-all">
+              <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="glass-panel p-lg rounded-2xl border border-white/10">
         <h3 class="font-headline text-headline-md text-on-surface mb-xs">Invite Friends</h3>
         <p class="font-body text-body-md text-on-surface-variant mb-md">Earn coins when your friends join Pulse!</p>

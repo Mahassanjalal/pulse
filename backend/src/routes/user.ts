@@ -203,7 +203,7 @@ export default async function userRoutes(app: FastifyInstance) {
   app.get('/me/dashboard', { preHandler: authenticate }, async (req) => {
     const authUser = getAuthUser(req)!;
 
-    const [user, onlineCount] = await Promise.all([
+    const [user, onlineCount, trending] = await Promise.all([
       prisma.user.findUnique({
         where: { id: authUser.id },
         select: {
@@ -219,9 +219,59 @@ export default async function userRoutes(app: FastifyInstance) {
         },
       }),
       prisma.user.count({ where: { status: 'ONLINE' } }),
+      prisma.user.findMany({
+        where: {
+          id: { not: authUser.id },
+          isGuest: false,
+        },
+        select: {
+          id: true,
+          displayName: true,
+          profilePicture: true,
+          interests: true,
+          isVerified: true,
+          isPremium: true,
+          country: true,
+          status: true,
+        },
+        orderBy: { trustScore: 'desc' },
+        take: 12,
+      }),
     ]);
 
-    return { stats: user, onlineCount };
+    return { stats: user, onlineCount, trending };
+  });
+
+  // POST /me/daily-reward - Claim daily reward
+  app.post('/me/daily-reward', { preHandler: authenticate }, async (req, reply) => {
+    const authUser = getAuthUser(req)!;
+    const REWARD_COINS = 10;
+    const now = new Date();
+
+    const user = await prisma.user.findUnique({ where: { id: authUser.id } });
+    if (!user) return reply.status(404).send({ error: 'User not found' });
+
+    const lastClaim = user.lastDailyClaim;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const lastClaimDay = lastClaim ? new Date(lastClaim.getFullYear(), lastClaim.getMonth(), lastClaim.getDate()) : null;
+
+    if (lastClaimDay && lastClaimDay.getTime() === today.getTime()) {
+      return reply.status(400).send({ error: 'Already claimed today' });
+    }
+
+    const isConsecutive = lastClaimDay && (today.getTime() - lastClaimDay.getTime()) === 86400000;
+    const newStreak = isConsecutive ? user.dailyStreak + 1 : 1;
+
+    await prisma.user.update({
+      where: { id: authUser.id },
+      data: {
+        coins: { increment: REWARD_COINS },
+        dailyStreak: newStreak,
+        lastDailyClaim: now,
+      },
+    });
+
+    return { coins: user.coins + REWARD_COINS, dailyStreak: newStreak };
   });
 
   // GET /me/visitors - Profile visitors

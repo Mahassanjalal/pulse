@@ -1,7 +1,8 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
+import { PresenceService } from './presence.service';
 
 export interface Friend {
   friendId: string;
@@ -26,12 +27,32 @@ export interface FriendRequest {
 @Injectable({
   providedIn: 'root'
 })
-export class FriendService {
+export class FriendService implements OnDestroy {
   private friends$ = new BehaviorSubject<Friend[]>([]);
   private receivedRequests$ = new BehaviorSubject<FriendRequest[]>([]);
   private sentRequests$ = new BehaviorSubject<FriendRequest[]>([]);
+  private presenceSub: Subscription;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private presenceService: PresenceService) {
+    this.presenceSub = this.presenceService.onPresenceChanged$.subscribe(({ userId, status }) => {
+      const current = this.friends$.value;
+      let changed = false;
+      const updated = current.map(f => {
+        if (f.peer.id === userId && f.peer.status !== status) {
+          changed = true;
+          return { ...f, peer: { ...f.peer, status } };
+        }
+        return f;
+      });
+      if (changed) {
+        this.friends$.next(updated);
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.presenceSub?.unsubscribe();
+  }
 
   get friendsObs(): Observable<Friend[]> {
     return this.friends$.asObservable();
@@ -47,7 +68,13 @@ export class FriendService {
 
   loadFriends(): void {
     this.http.get<{ friends: Friend[] }>(`${environment.apiUrl}/friends`).subscribe({
-      next: (res) => this.friends$.next(res.friends),
+      next: (res) => {
+        this.friends$.next(res.friends);
+        const friendIds = res.friends.map(f => f.peer.id);
+        if (friendIds.length > 0) {
+          this.presenceService.syncUsers(friendIds);
+        }
+      },
       error: () => this.friends$.next([])
     });
   }

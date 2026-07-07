@@ -11,6 +11,7 @@ import { AuthService } from '../../core/services/auth.service';
 export class FriendsPageComponent implements OnInit {
   friends: Friend[] = [];
   receivedRequests: FriendRequest[] = [];
+  sentRequests: FriendRequest[] = [];
   searchQuery = '';
 
   constructor(private friendService: FriendService, private router: Router, public authService: AuthService) {}
@@ -20,6 +21,7 @@ export class FriendsPageComponent implements OnInit {
     this.friendService.loadRequests();
     this.friendService.friendsObs.subscribe(friends => this.friends = friends);
     this.friendService.receivedRequestsObs.subscribe(reqs => this.receivedRequests = reqs);
+    this.friendService.sentRequestsObs.subscribe(reqs => this.sentRequests = reqs);
   }
 
   get onlineFriends(): Friend[] {

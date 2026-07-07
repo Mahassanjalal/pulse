@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
+import { Component, HostListener, OnInit, OnDestroy, AfterViewInit, ElementRef, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { MatchingService, MatchData } from '../../core/services/matching.service';
@@ -10,11 +10,14 @@ import { SocketService } from '../../core/services/socket.service';
   templateUrl: './video-chat.page.html',
   styles: []
 })
-export class VideoChatPageComponent implements OnInit, OnDestroy {
+export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('localVideo') localVideoRef!: ElementRef<HTMLVideoElement>;
   @ViewChild('remoteVideo') remoteVideoRef!: ElementRef<HTMLVideoElement>;
+  @ViewChild('chatMessagesContainer') chatMessagesContainer!: ElementRef<HTMLElement>;
+  @ViewChild('mobileChatMessagesContainer') mobileChatMessagesContainer!: ElementRef<HTMLElement>;
 
   chatOpen = true;
+  mobileChatOpen = false;
   isMuted = false;
   isCameraOff = false;
   newChatMessage = '';
@@ -25,6 +28,11 @@ export class VideoChatPageComponent implements OnInit, OnDestroy {
   currentPeer: MatchData | null = null;
   currentMatchId: string | null = null;
   chatMessages: { text: string; self: boolean; time: string }[] = [];
+  toastMessage: string | null = null;
+  connectionState = '';
+  connectionStateColor = '';
+  hadPreviousMatch = false;
+  private toastTimeout: any = null;
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -43,7 +51,13 @@ export class VideoChatPageComponent implements OnInit, OnDestroy {
       this.matchingService.matchFoundObs$.subscribe(async (peer) => {
         this.currentPeer = peer;
         this.currentMatchId = peer.matchId;
+        this.hadPreviousMatch = true;
         this.chatMessages = [];
+        this.chatOpen = true;
+        this.mobileChatOpen = false;
+        await this.webRTCService.init();
+        this.isMuted = false;
+        this.isCameraOff = false;
         await this.webRTCService.createPeerConnection(peer.matchId);
         await this.webRTCService.createOffer(peer.matchId);
       })
@@ -80,13 +94,74 @@ export class VideoChatPageComponent implements OnInit, OnDestroy {
           self: false,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
+        this.scrollChatToBottom();
       })
     );
+
+    this.subscriptions.push(
+      this.webRTCService.localStream$.subscribe(stream => {
+        if (stream && this.localVideoRef?.nativeElement) {
+          this.localVideoRef.nativeElement.srcObject = stream;
+        }
+      })
+    );
+
+    this.subscriptions.push(
+      this.webRTCService.remoteStream$.subscribe(stream => {
+        if (stream && this.remoteVideoRef?.nativeElement) {
+          this.remoteVideoRef.nativeElement.srcObject = stream;
+        }
+      })
+    );
+
+    this.subscriptions.push(
+      this.socketService.on('error').subscribe((data: any) => {
+        this.showToast(data.message || 'An error occurred');
+      })
+    );
+
+    this.subscriptions.push(
+      this.webRTCService.connectionState$.subscribe(state => {
+        this.connectionState = state;
+        const colorMap: Record<string, string> = {
+          connected: 'bg-tertiary',
+          connecting: 'bg-yellow-400',
+          disconnected: 'bg-error',
+          failed: 'bg-error',
+          closed: 'bg-on-surface-variant',
+          'new': 'bg-on-surface-variant',
+        };
+        this.connectionStateColor = colorMap[state] || 'bg-on-surface-variant';
+      })
+    );
+  }
+
+  ngAfterViewInit(): void {
+    const currentLocal = this.webRTCService.getLocalStream();
+    if (currentLocal && this.localVideoRef?.nativeElement) {
+      this.localVideoRef.nativeElement.srcObject = currentLocal;
+    }
+    const currentRemote = this.webRTCService.getRemoteStream();
+    if (currentRemote && this.remoteVideoRef?.nativeElement) {
+      this.remoteVideoRef.nativeElement.srcObject = currentRemote;
+    }
+  }
+
+  private scrollChatToBottom(): void {
+    setTimeout(() => {
+      if (this.chatMessagesContainer?.nativeElement) {
+        this.chatMessagesContainer.nativeElement.scrollTop = this.chatMessagesContainer.nativeElement.scrollHeight;
+      }
+      if (this.mobileChatMessagesContainer?.nativeElement) {
+        this.mobileChatMessagesContainer.nativeElement.scrollTop = this.mobileChatMessagesContainer.nativeElement.scrollHeight;
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(s => s.unsubscribe());
     this.webRTCService.disconnect();
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
   }
 
   startMatching(): void {
@@ -111,6 +186,14 @@ export class VideoChatPageComponent implements OnInit, OnDestroy {
     this.webRTCService.toggleCamera();
   }
 
+  toggleChat(): void {
+    if (window.innerWidth < 768) {
+      this.mobileChatOpen = !this.mobileChatOpen;
+    } else {
+      this.chatOpen = !this.chatOpen;
+    }
+  }
+
   sendChatMessage(): void {
     if (!this.newChatMessage.trim() || !this.currentMatchId) return;
     const content = this.newChatMessage.trim();
@@ -121,17 +204,25 @@ export class VideoChatPageComponent implements OnInit, OnDestroy {
       self: true,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
+    this.scrollChatToBottom();
   }
 
   addFriend(): void {
     if (this.currentPeer) {
       this.socketService.sendFriendRequest(this.currentPeer.userId);
+      this.showToast('Friend request sent!');
     }
   }
 
   goBack(): void {
     this.webRTCService.disconnect();
     this.router.navigate(['/dashboard']);
+  }
+
+  showToast(message: string): void {
+    this.toastMessage = message;
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = setTimeout(() => this.toastMessage = null, 3000);
   }
 
   @HostListener('document:mousemove', ['$event'])

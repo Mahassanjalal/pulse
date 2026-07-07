@@ -1,6 +1,7 @@
 import { Component, HostListener, OnInit } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { NotificationService } from '../../../core/services/notification.service';
 import { filter } from 'rxjs/operators';
 
 @Component({
@@ -53,6 +54,13 @@ import { filter } from 'rxjs/operators';
 
         <div class="w-px h-6 bg-white/10 mx-2"></div>
 
+        <a routerLink="/notifications"
+           class="w-10 h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all relative"
+           [class.text-primary]="isActive('/notifications')">
+          <span class="material-symbols-outlined">notifications</span>
+          <span *ngIf="unreadCount > 0" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-error text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-surface">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+        </a>
+
         <a routerLink="/settings"
            class="w-10 h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all"
            [class.text-primary]="isActive('/settings')">
@@ -95,8 +103,13 @@ export class HeaderComponent implements OnInit {
   scrolled = false;
   currentUrl = '/dashboard';
   userAvatar = 'https://i.pravatar.cc/100?img=1';
+  unreadCount = 0;
 
-  constructor(private router: Router, private authService: AuthService) {
+  constructor(
+    private router: Router,
+    private authService: AuthService,
+    private notificationService: NotificationService
+  ) {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
@@ -110,6 +123,13 @@ export class HeaderComponent implements OnInit {
         this.userAvatar = user.profilePicture;
       }
     });
+    this.notificationService.notifications$.subscribe(() => {
+      this.unreadCount = this.notificationService.getUnreadCount();
+    });
+    this.notificationService.unreadCount$.subscribe(count => {
+      this.unreadCount = count;
+    });
+    this.notificationService.loadNotifications();
   }
 
   @HostListener('window:scroll')

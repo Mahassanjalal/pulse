@@ -18,6 +18,10 @@
         <span class="w-2 h-2 bg-primary rounded-full pulse-animation"></span>
         <span class="font-label text-label-sm text-primary uppercase tracking-wider">SEARCHING...</span>
       </div>
+      <div *ngIf="status === 'matched' && connectionState" class="hidden md:flex items-center gap-xs bg-surface/20 px-md py-xs rounded-full">
+        <span class="w-2 h-2 rounded-full" [ngClass]="connectionStateColor"></span>
+        <span class="font-label text-label-sm text-on-surface-variant uppercase tracking-wider">{{ connectionState }}</span>
+      </div>
       <a (click)="goBack()" class="p-sm rounded-full hover:bg-white/5 transition-all cursor-pointer">
         <span class="material-symbols-outlined text-on-surface-variant">close</span>
       </a>
@@ -30,12 +34,12 @@
     <div class="flex-1 relative bg-surface-container-lowest overflow-hidden">
       <!-- Waiting/Idle State -->
       <div *ngIf="status === 'idle'" class="absolute inset-0 flex flex-col items-center justify-center gap-lg">
-        <span class="material-symbols-outlined text-6xl text-on-surface-variant/30">videocam</span>
-        <h2 class="font-headline text-headline-lg text-on-surface">Ready to connect?</h2>
-        <p class="text-on-surface-variant text-body-lg">Start matching to meet someone new from around the world.</p>
+        <span class="material-symbols-outlined text-6xl text-on-surface-variant/30">{{ hadPreviousMatch ? 'replay' : 'videocam' }}</span>
+        <h2 class="font-headline text-headline-lg text-on-surface">{{ hadPreviousMatch ? 'Want another round?' : 'Ready to connect?' }}</h2>
+        <p class="text-on-surface-variant text-body-lg">{{ hadPreviousMatch ? 'That was fun! Meet someone else now.' : 'Start matching to meet someone new from around the world.' }}</p>
         <button (click)="startMatching()" class="px-xl py-lg bg-primary text-on-primary rounded-2xl font-headline text-headline-md flex items-center gap-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
-          <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">videocam</span>
-          Start Matching
+          <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">{{ hadPreviousMatch ? 'refresh' : 'videocam' }}</span>
+          {{ hadPreviousMatch ? 'Find New Match' : 'Start Matching' }}
         </button>
       </div>
 
@@ -94,7 +98,7 @@
           <button (click)="toggleCamera()"
             class="w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95"
             [ngClass]="isCameraOff ? 'bg-error/20 border border-error/40 text-error' : 'glass-panel border border-white/10 text-on-surface hover:bg-white/10'">
-            <span class="material-symbols-outlined">{{ isCameraOff ? 'videcam_off' : 'videocam' }}</span>
+            <span class="material-symbols-outlined">{{ isCameraOff ? 'videocam_off' : 'videocam' }}</span>
           </button>
         </div>
 
@@ -115,19 +119,49 @@
             <span class="material-symbols-outlined">person_add</span>
           </button>
           <!-- Toggle Chat -->
-          <button (click)="chatOpen = !chatOpen" class="w-12 h-12 rounded-full glass-panel border border-white/10 text-secondary flex items-center justify-center hover:bg-secondary/10 transition-all active:scale-95">
-            <span class="material-symbols-outlined">chat_bubble</span>
+          <button (click)="toggleChat()" class="w-12 h-12 rounded-full glass-panel border border-white/10 text-secondary flex items-center justify-center hover:bg-secondary/10 transition-all active:scale-95">
+            <span class="material-symbols-outlined md:hidden">chat_bubble</span>
+            <span class="material-symbols-outlined hidden md:block">chat_bubble</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Chat Panel (Right) -->
+    <!-- Chat Panel (Right) - Desktop -->
     <div *ngIf="chatOpen && status === 'matched'" class="w-80 flex flex-col border-l border-white/10 bg-surface/60 backdrop-blur-xl hidden md:flex">
       <div class="p-md border-b border-white/10">
         <h3 class="font-headline text-headline-md text-on-surface">Live Chat</h3>
       </div>
-      <div class="flex-1 overflow-y-auto p-md space-y-sm">
+      <div #chatMessagesContainer class="flex-1 overflow-y-auto p-md space-y-sm">
+        <div *ngFor="let msg of chatMessages"
+          class="flex"
+          [ngClass]="msg.self ? 'justify-end' : 'justify-start'">
+          <div class="max-w-[80%] px-md py-sm rounded-2xl text-sm"
+            [ngClass]="msg.self ? 'bg-primary text-on-primary rounded-br-sm' : 'bg-surface-container text-on-surface rounded-bl-sm border border-white/5'">
+            {{ msg.text }}
+          </div>
+        </div>
+      </div>
+      <div class="p-md border-t border-white/10 flex gap-sm">
+        <input [(ngModel)]="newChatMessage"
+          (keyup.enter)="sendChatMessage()"
+          class="flex-1 bg-surface-container/40 border border-white/5 rounded-full py-sm px-md text-on-surface text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:border-secondary transition-all"
+          placeholder="Message..." type="text" />
+        <button (click)="sendChatMessage()" class="w-9 h-9 bg-secondary-container rounded-full flex items-center justify-center neon-glow-cyan hover:brightness-110 active:scale-95 transition-all">
+          <span class="material-symbols-outlined text-on-secondary-container text-sm" style="font-variation-settings: 'FILL' 1;">send</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Chat Overlay -->
+    <div *ngIf="mobileChatOpen && status === 'matched'" class="fixed inset-0 z-40 bg-surface/80 backdrop-blur-xl flex md:hidden flex-col">
+      <div class="flex items-center justify-between p-md border-b border-white/10">
+        <h3 class="font-headline text-headline-md text-on-surface">Live Chat</h3>
+        <button (click)="mobileChatOpen = false" class="p-sm rounded-full hover:bg-white/5 transition-all">
+          <span class="material-symbols-outlined text-on-surface-variant">close</span>
+        </button>
+      </div>
+      <div #mobileChatMessagesContainer class="flex-1 overflow-y-auto p-md space-y-sm">
         <div *ngFor="let msg of chatMessages"
           class="flex"
           [ngClass]="msg.self ? 'justify-end' : 'justify-start'">
@@ -148,4 +182,9 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Toast Notification -->
+<div *ngIf="toastMessage" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-surface/90 backdrop-blur-md border border-white/10 px-lg py-md rounded-xl shadow-2xl animate-fade-in">
+  <p class="font-label text-label-md text-on-surface">{{ toastMessage }}</p>
 </div>

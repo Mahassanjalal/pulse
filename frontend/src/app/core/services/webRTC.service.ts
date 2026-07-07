@@ -12,7 +12,7 @@ export class WebRTCService {
 
   private localStreamSubject = new BehaviorSubject<MediaStream | null>(null);
   private remoteStreamSubject = new BehaviorSubject<MediaStream | null>(null);
-  private connectionState$ = new Subject<string>();
+  private connectionStateSubject = new Subject<string>();
 
   private iceServers: RTCConfiguration = {
     iceServers: [
@@ -54,6 +54,10 @@ export class WebRTCService {
     return this.remoteStreamSubject.asObservable();
   }
 
+  get connectionState$(): Observable<string> {
+    return this.connectionStateSubject.asObservable();
+  }
+
   async init(): Promise<void> {
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
@@ -92,7 +96,7 @@ export class WebRTCService {
     };
 
     this.peerConnection.onconnectionstatechange = () => {
-      this.connectionState$.next(this.peerConnection?.connectionState || 'unknown');
+      this.connectionStateSubject.next(this.peerConnection?.connectionState || 'unknown');
     };
   }
 

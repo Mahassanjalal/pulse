@@ -1,8 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { FriendService } from '../../core/services/friend.service';
+import { PresenceService } from '../../core/services/presence.service';
 import { environment } from '@env/environment';
 import { tap } from 'rxjs/operators';
 
@@ -36,7 +38,7 @@ interface UserProfile {
   templateUrl: './profile.page.html',
   styles: []
 })
-export class ProfilePageComponent implements OnInit {
+export class ProfilePageComponent implements OnInit, OnDestroy {
   user: UserProfile | null = null;
   isOwnProfile = false;
   mutualFriends: any[] = [];
@@ -46,6 +48,8 @@ export class ProfilePageComponent implements OnInit {
   relationship: string = 'NONE';
   friendId: string | null = null;
   isLoading = true;
+  liveStatus = 'OFFLINE';
+  private presenceSub: Subscription | null = null;
 
   showReportDialog = false;
   reportCategory = 'OTHER';
@@ -61,6 +65,7 @@ export class ProfilePageComponent implements OnInit {
     private http: HttpClient,
     private authService: AuthService,
     private friendService: FriendService,
+    private presenceService: PresenceService,
     private router: Router
   ) {}
 
@@ -76,6 +81,18 @@ export class ProfilePageComponent implements OnInit {
     });
   }
 
+  ngOnDestroy(): void {
+    this.presenceSub?.unsubscribe();
+  }
+
+  private watchPresence(userId: string): void {
+    this.presenceSub?.unsubscribe();
+    this.presenceService.syncUsers([userId]);
+    this.presenceSub = this.presenceService.watchUser(userId).subscribe(entry => {
+      this.liveStatus = entry.status;
+    });
+  }
+
   private loadOwnProfile(): void {
     const currentUser = this.authService.getCurrentUser();
     if (currentUser) {
@@ -83,9 +100,11 @@ export class ProfilePageComponent implements OnInit {
       this.http.get<{ user: UserProfile }>(`${environment.apiUrl}/users/${currentUser.id}`).subscribe({
         next: (res) => {
           this.user = res.user;
+          this.liveStatus = res.user.status;
           this.parseInterests();
           this.isLoading = false;
           this.loadProfileVisitors();
+          this.watchPresence(currentUser.id);
         },
         error: () => this.isLoading = false
       });
@@ -102,9 +121,11 @@ export class ProfilePageComponent implements OnInit {
     this.http.get<{ user: UserProfile }>(`${environment.apiUrl}/users/${userId}`).subscribe({
       next: (res) => {
         this.user = res.user;
+        this.liveStatus = res.user.status;
         this.parseInterests();
         this.isLoading = false;
         this.loadRelationshipStatus(userId);
+        this.watchPresence(userId);
       },
       error: () => this.isLoading = false
     });

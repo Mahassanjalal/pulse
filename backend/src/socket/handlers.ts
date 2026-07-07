@@ -12,6 +12,47 @@ interface SocketAuth extends Socket {
 const waitingUsers = new Map<string, { socketId: string; filters?: any }>();
 const activeMatches = new Map<string, { user1: string; user2: string; matchId: string; startTime: number }>();
 
+// Multi-tab connection tracking: userId -> Set<socketId>
+const userConnections = new Map<string, Set<string>>();
+// Heartbeat timers: socketId -> timeout handle
+const heartbeatTimers = new Map<string, NodeJS.Timeout>();
+
+const HEARTBEAT_TIMEOUT = 90000; // 90s without heartbeat -> disconnect
+
+async function broadcastPresence(io: Server, userId: string, status: string, lastSeen: Date): Promise<void> {
+  try {
+    const friends = await prisma.friend.findMany({
+      where: {
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      select: {
+        senderId: true,
+        receiverId: true,
+      },
+    });
+
+    const friendIds = friends.map(f => (f.senderId === userId ? f.receiverId : f.senderId));
+
+    for (const friendId of friendIds) {
+      io.to(`user_${friendId}`).emit('presence_changed', { userId, status, lastSeen });
+    }
+  } catch (err) {
+    console.error('Broadcast presence error:', err);
+  }
+}
+
+function resetHeartbeat(socket: Socket, userId: string): void {
+  const existing = heartbeatTimers.get(socket.id);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(async () => {
+    console.log(`Heartbeat timeout for ${socket.id} (user: ${userId})`);
+    socket.disconnect();
+  }, HEARTBEAT_TIMEOUT);
+
+  heartbeatTimers.set(socket.id, timer);
+}
+
 export function setupSocketHandlers(io: Server, app: FastifyInstance) {
   io.use(async (socket, next) => {
     try {
@@ -43,17 +84,57 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
   io.on('connection', (socket) => {
     const authSocket = socket as SocketAuth;
     const userId = authSocket.userId!;
-    
+
     console.log(`Socket connected: ${socket.id} (user: ${userId})`);
-    
-    // Join user's personal room for notifications
+
+    // Join user's personal room
     socket.join(`user_${userId}`);
 
-    // Update user status
-    prisma.user.update({
-      where: { id: userId },
-      data: { status: 'ONLINE', lastSeen: new Date() },
-    }).catch(err => console.error('Status update error:', err));
+    // Multi-tab connection tracking
+    if (!userConnections.has(userId)) {
+      userConnections.set(userId, new Set());
+    }
+    const connections = userConnections.get(userId)!;
+    const wasOffline = connections.size === 0;
+    connections.add(socket.id);
+
+    // Start heartbeat timer
+    resetHeartbeat(socket, userId);
+
+    // If this is the first connection, mark as ONLINE and broadcast
+    if (wasOffline) {
+      prisma.user.update({
+        where: { id: userId },
+        data: { status: 'ONLINE', lastSeen: new Date() },
+      }).then(() => {
+        broadcastPresence(io, userId, 'ONLINE', new Date());
+      }).catch(err => console.error('Status update error:', err));
+    }
+
+    // ======================================
+    // HEARTBEAT
+    // ======================================
+
+    socket.on('heartbeat', () => {
+      resetHeartbeat(socket, userId);
+      prisma.user.update({
+        where: { id: userId },
+        data: { lastSeen: new Date() },
+      }).catch(() => {});
+      socket.emit('pong');
+    });
+
+    // ======================================
+    // PRESENCE SYNC
+    // ======================================
+
+    socket.on('presence_sync', async (data: { userIds: string[] }) => {
+      const users = await prisma.user.findMany({
+        where: { id: { in: data.userIds } },
+        select: { id: true, status: true, lastSeen: true },
+      });
+      socket.emit('presence_sync_result', { users });
+    });
 
     // ======================================
     // MATCHING EVENTS
@@ -67,7 +148,6 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         data: { status: 'MATCHING' },
       });
 
-      // Free users: ignore filters, apply gender-weighted matching
       const userGender = authSocket.gender;
       const isPremium = authSocket.isPremium;
 
@@ -76,19 +156,16 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         filters: isPremium ? data?.filters : undefined,
       });
 
-      // Determine target gender for free users (75% same-gender bias)
       let targetGender: string | null = null;
       if (!isPremium && userGender) {
         const roll = Math.random();
         targetGender = roll < 0.75 ? userGender : (userGender === 'MALE' ? 'FEMALE' : 'MALE');
       }
 
-      // Search for a match
       for (const [waitingUserId, waitingData] of waitingUsers) {
         if (waitingUserId !== userId) {
           if (await isBlocked(userId, waitingUserId)) continue;
 
-          // For free users, check gender preference
           if (targetGender) {
             const peerUser = await prisma.user.findUnique({
               where: { id: waitingUserId },
@@ -100,7 +177,6 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           waitingUsers.delete(waitingUserId);
           waitingUsers.delete(userId);
 
-          // Get user details
           const [peer1, peer2] = await Promise.all([
             prisma.user.findUnique({
               where: { id: waitingUserId },
@@ -118,7 +194,6 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           const peer2Interests: string[] = JSON.parse(peer2.interests || '[]');
           const mutual = peer1Interests.filter((i: string) => peer2Interests.includes(i));
 
-          // Create match record
           const match = await prisma.match.create({
             data: {
               user1Id: waitingUserId,
@@ -130,7 +205,6 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
           activeMatches.set(match.id, { user1: waitingUserId, user2: userId, matchId: match.id, startTime: Date.now() });
 
-          // Emit match found
           io.to(waitingData.socketId).emit('match_found', {
             matchId: match.id,
             peer: {
@@ -163,18 +237,17 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         }
       }
 
-      // No match found, notify user they are in queue
       socket.emit('matching_queue', { queuePosition: waitingUsers.size, status: 'waiting' });
     });
 
     socket.on('cancel_matching', async () => {
       waitingUsers.delete(userId);
-      
+
       await prisma.user.update({
         where: { id: userId },
         data: { status: 'ONLINE' },
       });
-      
+
       socket.emit('matching_cancelled');
     });
 
@@ -228,21 +301,6 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       try {
         const otherUserId = match.user1 === userId ? match.user2 : match.user1;
-
-        // Check if users are friends
-        const areFriends = await prisma.friend.findFirst({
-          where: {
-            OR: [
-              { senderId: userId, receiverId: otherUserId },
-              { senderId: otherUserId, receiverId: userId },
-            ],
-          },
-        });
-
-        if (!areFriends) {
-          socket.emit('error', { message: 'You must be friends to chat. Send a friend request first.' });
-          return;
-        }
 
         const message = await prisma.message.create({
           data: {
@@ -303,7 +361,6 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const otherUserId = match.user1 === userId ? match.user2 : match.user1;
       activeMatches.delete(data.matchId);
 
-      // Update user statuses
       await Promise.all([
         prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
         prisma.user.update({ where: { id: otherUserId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
@@ -362,14 +419,30 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     socket.on('disconnect', async () => {
       console.log(`Socket disconnected: ${socket.id} (user: ${userId})`);
 
+      // Clear heartbeat timer
+      const timer = heartbeatTimers.get(socket.id);
+      if (timer) {
+        clearTimeout(timer);
+        heartbeatTimers.delete(socket.id);
+      }
+
       // Remove from waiting pool
       waitingUsers.delete(userId);
 
-      // Update user status
-      await prisma.user.update({
-        where: { id: userId },
-        data: { status: 'OFFLINE', lastSeen: new Date() },
-      });
+      // Multi-tab: only go OFFLINE if this was the last connection
+      const connections = userConnections.get(userId);
+      if (connections) {
+        connections.delete(socket.id);
+        if (connections.size === 0) {
+          userConnections.delete(userId);
+          const now = new Date();
+          await prisma.user.update({
+            where: { id: userId },
+            data: { status: 'OFFLINE', lastSeen: now },
+          });
+          broadcastPresence(io, userId, 'OFFLINE', now);
+        }
+      }
     });
   });
 }
