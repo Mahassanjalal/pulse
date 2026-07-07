@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { PresenceService } from '../../core/services/presence.service';
+import { PremiumModalService } from '../../core/services/premium-modal.service';
 import { environment } from '@env/environment';
 
 interface DiscoverUser {
@@ -51,6 +52,7 @@ export class DiscoverPageComponent implements OnInit, OnDestroy {
     private http: HttpClient,
     private authService: AuthService,
     private presenceService: PresenceService,
+    private premiumModalService: PremiumModalService,
     private router: Router
   ) {}
 
@@ -116,6 +118,6 @@ export class DiscoverPageComponent implements OnInit, OnDestroy {
   }
 
   goPremium(): void {
-    this.router.navigate(['/premium']);
+    this.premiumModalService.open();
   }
 }

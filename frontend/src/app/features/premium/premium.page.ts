@@ -1,7 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
+import { PremiumService, Plan } from '../../core/services/premium.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'pulse-premium',
@@ -16,8 +18,19 @@ import { SharedModule } from '@shared/shared.module';
         <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">Elevate your connections with advanced targeting and cinematic streaming quality. See who's truly matching your vibe.</p>
       </div>
 
+      <!-- Loading -->
+      <div *ngIf="loading" class="flex justify-center py-xl">
+        <span class="material-symbols-outlined text-4xl text-primary pulse-animation">sync</span>
+      </div>
+
+      <!-- Error -->
+      <div *ngIf="error" class="text-center py-xl text-error">
+        <p>{{ error }}</p>
+        <button (click)="loadPlans()" class="mt-md text-primary hover:underline">Retry</button>
+      </div>
+
       <!-- Pricing -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
+      <div *ngIf="!loading && !error" class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
         <div *ngFor="let plan of plans" class="glass-panel rounded-3xl p-xl border border-white/10 flex flex-col relative" [ngClass]="{'border-primary/40': plan.popular}">
           <div *ngIf="plan.popular" class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-on-primary px-lg py-xs rounded-full text-[10px] font-black uppercase tracking-widest">Most Popular</div>
           <div class="text-center mb-lg">
@@ -33,9 +46,20 @@ import { SharedModule } from '@shared/shared.module';
               {{ feature }}
             </li>
           </ul>
-          <button class="w-full py-md rounded-xl font-headline-md text-headline-md transition-all active:scale-95" [class]="plan.popular ? 'bg-primary text-on-primary neon-glow-primary' : 'glass-panel text-on-surface border border-white/10 hover:bg-white/10'">
-            {{ plan.cta }}
-          </button>
+          <ng-container *ngIf="!isPremium; else manageBlock">
+            <button (click)="subscribe(plan.id)" [disabled]="subscribing"
+              class="w-full py-md rounded-xl font-headline-md text-headline-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              [class]="plan.popular ? 'bg-primary text-on-primary neon-glow-primary' : 'glass-panel text-on-surface border border-white/10 hover:bg-white/10'">
+              <span *ngIf="subscribing" class="material-symbols-outlined animate-spin text-sm inline-block mr-sm">sync</span>
+              {{ subscribing ? 'Processing...' : (plan.popular ? 'Upgrade to ' + plan.name : 'Get ' + plan.name) }}
+            </button>
+          </ng-container>
+          <ng-template #manageBlock>
+            <div class="text-center py-md px-md rounded-xl bg-tertiary/10 border border-tertiary/20">
+              <p class="font-label-md text-label-md text-tertiary mb-sm">Subscribed ✓</p>
+              <button (click)="cancelSubscription()" class="text-xs text-on-surface-variant hover:text-error transition-colors">Cancel Subscription</button>
+            </div>
+          </ng-template>
         </div>
       </div>
 
@@ -55,21 +79,66 @@ import { SharedModule } from '@shared/shared.module';
   `,
   styles: []
 })
-export class PremiumPageComponent {
-  plans = [
-    {
-      name: 'Silver', price: 9.99, popular: false, cta: 'Get Silver',
-      features: ['Ad-Free Experience', 'HD Video (720p)', 'Send & Accept Friend Requests', 'Advanced Filters (Gender & Location)', 'Basic Support', 'Silver Premium Badge']
-    },
-    {
-      name: 'Gold', price: 19.99, popular: true, cta: 'Upgrade to Gold',
-      features: ['Everything in Silver', 'Full HD Video (1080p)', 'Global Travel Mode', 'Incognito Mode', 'Priority Support', 'Gold Premium Badge', 'Custom Themes']
-    },
-    {
-      name: 'Platinum', price: 29.99, popular: false, cta: 'Go Platinum',
-      features: ['Everything in Gold', 'AI-Enhanced Matchmaking', 'Animated Premium Badge', '24/7 VIP Dedicated Support', 'Unlimited Global Travel', 'Exclusive Custom Themes', 'Priority in Matching Queue']
+export class PremiumPageComponent implements OnInit {
+  plans: Plan[] = [];
+  loading = true;
+  error = '';
+  subscribing = false;
+  isPremium = false;
+
+  constructor(
+    private premiumService: PremiumService,
+    private authService: AuthService
+  ) {}
+
+  ngOnInit(): void {
+    this.authService.user$.subscribe(user => {
+      this.isPremium = user?.isPremium || false;
+    });
+    this.loadPlans();
+  }
+
+  loadPlans(): void {
+    this.loading = true;
+    this.error = '';
+    this.premiumService.getPlans().subscribe({
+      next: (res) => {
+        this.plans = res.plans;
+        this.loading = false;
+      },
+      error: () => {
+        this.error = 'Failed to load plans. Please try again.';
+        this.loading = false;
+      }
+    });
+  }
+
+  subscribe(planId: string): void {
+    this.subscribing = true;
+    this.premiumService.subscribe(planId).subscribe({
+      next: () => {
+        this.authService.fetchCurrentUser().subscribe();
+        this.subscribing = false;
+      },
+      error: (err) => {
+        this.error = err.error?.error || 'Subscription failed. Please try again.';
+        this.subscribing = false;
+      }
+    });
+  }
+
+  cancelSubscription(): void {
+    if (confirm('Are you sure you want to cancel your subscription?')) {
+      this.premiumService.cancel().subscribe({
+        next: () => {
+          this.authService.fetchCurrentUser().subscribe();
+        },
+        error: () => {
+          this.error = 'Failed to cancel subscription.';
+        }
+      });
     }
-  ];
+  }
 
   premiumFeatures = [
     { icon: 'person_add', title: 'Send & Accept Friend Requests', desc: 'Connect with people you vibe with. Send and accept friend requests to build your network.', bg: 'bg-secondary-fixed/20', iconColor: 'text-secondary-fixed' },

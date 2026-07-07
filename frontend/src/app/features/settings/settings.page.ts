@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SharedModule } from '@shared/shared.module';
 import { HttpClient } from '@angular/common/http';
@@ -253,7 +253,11 @@ import { environment } from '@env/environment';
           <a class="text-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy Policy</a>
           <a class="text-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Terms of Service</a>
         </div>
-        <button (click)="deleteAccount()" class="text-error-container hover:text-error text-sm font-bold transition-colors">Deactivate Account</button>
+        <div class="flex gap-lg items-center">
+          <button (click)="logout()" class="text-primary hover:text-error text-sm font-bold transition-colors">Sign Out</button>
+          <span class="text-on-surface-variant/30">|</span>
+          <button (click)="deleteAccount()" class="text-error-container hover:text-error text-sm font-bold transition-colors">Deactivate Account</button>
+        </div>
       </div>
     </div>
   `,
@@ -288,7 +292,7 @@ export class SettingsPageComponent implements OnInit {
   toastMessage: string | null = null;
   private toastTimeout: any = null;
 
-  constructor(private http: HttpClient, private authService: AuthService) {}
+  constructor(private http: HttpClient, private authService: AuthService, private router: Router) {}
 
   ngOnInit(): void {
     this.authService.user$.subscribe(user => {
@@ -409,6 +413,11 @@ export class SettingsPageComponent implements OnInit {
       },
       error: () => this.showToast('Failed to change password. Check your current password.')
     });
+  }
+
+  async logout(): Promise<void> {
+    await this.authService.logout();
+    this.router.navigate(['/login']);
   }
 
   deleteAccount(): void {

@@ -7,6 +7,7 @@ import { ShellModule } from './shell/shell.module';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { AuthInterceptor } from './core/interceptors/auth.interceptor';
+import { PremiumModalComponent } from './shared/components/premium-modal/premium-modal.component';
 
 @NgModule({
   declarations: [AppComponent],
@@ -16,7 +17,8 @@ import { AuthInterceptor } from './core/interceptors/auth.interceptor';
     HttpClientModule,
     CoreModule,
     ShellModule,
-    AppRoutingModule
+    AppRoutingModule,
+    PremiumModalComponent
   ],
   providers: [
     { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },

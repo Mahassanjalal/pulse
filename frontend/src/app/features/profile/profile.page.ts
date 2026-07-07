@@ -5,6 +5,7 @@ import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { FriendService } from '../../core/services/friend.service';
 import { PresenceService } from '../../core/services/presence.service';
+import { PremiumModalService } from '../../core/services/premium-modal.service';
 import { environment } from '@env/environment';
 import { tap } from 'rxjs/operators';
 
@@ -66,6 +67,7 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private friendService: FriendService,
     private presenceService: PresenceService,
+    private premiumModalService: PremiumModalService,
     private router: Router
   ) {}
 
@@ -220,7 +222,7 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         if (err.error?.error?.includes('premium')) {
-          this.router.navigate(['/premium']);
+          this.premiumModalService.open();
         }
       }
     });

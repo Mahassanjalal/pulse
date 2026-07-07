@@ -4,27 +4,27 @@ import { authenticate, getAuthUser } from '../middleware/auth';
 
 const PLANS = [
   {
-    id: 'basic',
-    name: 'Basic',
-    price: 4.99,
+    id: 'silver',
+    name: 'Silver',
+    price: 9.99,
     period: 'monthly',
-    features: ['Gender Filter', 'HD Video', 'Ad-Free', 'Basic Support'],
+    features: ['Ad-Free Experience', 'HD Video (720p)', 'Send & Accept Friend Requests', 'Advanced Filters (Gender & Location)', 'Basic Support', 'Silver Premium Badge'],
     popular: false,
   },
   {
-    id: 'premium',
-    name: 'Premium',
-    price: 9.99,
+    id: 'gold',
+    name: 'Gold',
+    price: 19.99,
     period: 'monthly',
-    features: ['Everything in Basic', 'Global Travel Mode', 'Premium Badge', 'Priority Support', 'Advanced Filters'],
+    features: ['Everything in Silver', 'Full HD Video (1080p)', 'Global Travel Mode', 'Incognito Mode', 'Priority Support', 'Gold Premium Badge', 'Custom Themes'],
     popular: true,
   },
   {
-    id: 'ultimate',
-    name: 'Ultimate',
-    price: 19.99,
+    id: 'platinum',
+    name: 'Platinum',
+    price: 29.99,
     period: 'monthly',
-    features: ['Everything in Premium', 'Incognito Mode', 'AI Matchmaking', '24/7 VIP Support', 'Custom Themes'],
+    features: ['Everything in Gold', 'AI-Enhanced Matchmaking', 'Animated Premium Badge', '24/7 VIP Dedicated Support', 'Unlimited Global Travel', 'Exclusive Custom Themes', 'Priority in Matching Queue'],
     popular: false,
   },
 ];
@@ -64,7 +64,7 @@ export default async function premiumRoutes(app: FastifyInstance) {
     }
     
     const price = period === 'yearly' ? plan.price * 12 * 0.8 : plan.price;
-    const planType = plan.name.toUpperCase() as 'BASIC' | 'PREMIUM' | 'ULTIMATE';
+    const planType = plan.name.toUpperCase() as 'SILVER' | 'GOLD' | 'PLATINUM';
     
     const subscription = await prisma.subscription.upsert({
       where: { userId: authUser.id },

@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { FriendService, Friend, FriendRequest } from '../../core/services/friend.service';
 import { AuthService } from '../../core/services/auth.service';
+import { PremiumModalService } from '../../core/services/premium-modal.service';
 
 @Component({
   selector: 'pulse-friends',
@@ -14,7 +15,12 @@ export class FriendsPageComponent implements OnInit {
   sentRequests: FriendRequest[] = [];
   searchQuery = '';
 
-  constructor(private friendService: FriendService, private router: Router, public authService: AuthService) {}
+  constructor(
+    private friendService: FriendService,
+    private router: Router,
+    public authService: AuthService,
+    private premiumModalService: PremiumModalService
+  ) {}
 
   ngOnInit(): void {
     this.friendService.loadFriends();
@@ -50,6 +56,10 @@ export class FriendsPageComponent implements OnInit {
     this.friendService.removeFriend(friendId).subscribe(() => {
       this.friendService.loadFriends();
     });
+  }
+
+  openPremiumModal(): void {
+    this.premiumModalService.open();
   }
 
   toggleFavorite(friendId: string): void {

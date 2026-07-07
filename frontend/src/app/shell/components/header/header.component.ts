@@ -2,6 +2,7 @@ import { Component, HostListener, OnInit } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { PremiumModalService } from '../../../core/services/premium-modal.service';
 import { filter } from 'rxjs/operators';
 
 @Component({
@@ -37,12 +38,6 @@ import { filter } from 'rxjs/operators';
           <span class="material-symbols-outlined text-lg">explore</span>
           <span>Discover</span>
         </a>
-        <a routerLink="/premium"
-           class="nav-pill hidden lg:flex"
-           [class.active]="isActive('/premium')">
-          <span class="material-symbols-outlined text-lg">workspace_premium</span>
-          <span>Premium</span>
-        </a>
 
         <div class="w-px h-6 bg-white/10 mx-2 hidden lg:block"></div>
 
@@ -54,24 +49,45 @@ import { filter } from 'rxjs/operators';
 
         <div class="w-px h-6 bg-white/10 mx-2"></div>
 
-        <a routerLink="/notifications"
-           class="w-10 h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all relative"
-           [class.text-primary]="isActive('/notifications')">
-          <span class="material-symbols-outlined">notifications</span>
-          <span *ngIf="unreadCount > 0" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-error text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-surface">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
-        </a>
+        <!-- Avatar Dropdown -->
+        <div class="relative ml-1">
+          <button (click)="toggleDropdown($event)" class="w-10 h-10 rounded-xl overflow-hidden border-2 transition-all cursor-pointer"
+            [ngClass]="dropdownOpen ? 'border-primary' : 'border-white/10 hover:border-primary/40'">
+            <img class="w-full h-full object-cover" [src]="userAvatar" alt="Profile" />
+          </button>
 
-        <a routerLink="/settings"
-           class="w-10 h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all"
-           [class.text-primary]="isActive('/settings')">
-          <span class="material-symbols-outlined">settings</span>
-        </a>
-
-        <a routerLink="/profile"
-           class="w-10 h-10 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ml-1"
-           [ngClass]="isActive('/profile') ? 'border-primary' : 'border-white/10'">
-          <img class="w-full h-full object-cover" [src]="userAvatar" alt="Profile" />
-        </a>
+          <div *ngIf="dropdownOpen"
+            class="absolute top-full right-0 mt-2 w-56 glass-panel rounded-2xl border border-white/10 shadow-2xl overflow-hidden z-50"
+            (click)="$event.stopPropagation()">
+            <a routerLink="/profile" (click)="closeDropdown()"
+              class="flex items-center gap-md px-lg py-sm hover:bg-white/5 transition-all">
+              <span class="material-symbols-outlined text-lg text-on-surface-variant">person</span>
+              <span class="text-sm text-on-surface">Profile</span>
+            </a>
+            <a routerLink="/notifications" (click)="closeDropdown()"
+              class="flex items-center gap-md px-lg py-sm hover:bg-white/5 transition-all relative">
+              <span class="material-symbols-outlined text-lg text-on-surface-variant">notifications</span>
+              <span class="text-sm text-on-surface">Notifications</span>
+              <span *ngIf="unreadCount > 0" class="ml-auto min-w-[18px] h-[18px] bg-error text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+            </a>
+            <a routerLink="/settings" (click)="closeDropdown()"
+              class="flex items-center gap-md px-lg py-sm hover:bg-white/5 transition-all">
+              <span class="material-symbols-outlined text-lg text-on-surface-variant">settings</span>
+              <span class="text-sm text-on-surface">Settings</span>
+            </a>
+            <button (click)="openPremiumModal(); closeDropdown()"
+              class="w-full flex items-center gap-md px-lg py-sm hover:bg-white/5 transition-all">
+              <span class="material-symbols-outlined text-lg text-yellow-400">workspace_premium</span>
+              <span class="text-sm text-on-surface">Premium</span>
+            </button>
+            <div class="h-px bg-white/5 mx-lg"></div>
+            <button (click)="logout()"
+              class="w-full flex items-center gap-md px-lg py-sm hover:bg-error/10 transition-all group">
+              <span class="material-symbols-outlined text-lg text-error">logout</span>
+              <span class="text-sm text-error">Logout</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
   `,
@@ -104,11 +120,13 @@ export class HeaderComponent implements OnInit {
   currentUrl = '/dashboard';
   userAvatar = 'https://i.pravatar.cc/100?img=1';
   unreadCount = 0;
+  dropdownOpen = false;
 
   constructor(
     private router: Router,
     private authService: AuthService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private premiumModalService: PremiumModalService
   ) {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
@@ -137,8 +155,31 @@ export class HeaderComponent implements OnInit {
     this.scrolled = window.scrollY > 30;
   }
 
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.dropdownOpen = false;
+  }
+
   isActive(path: string): boolean {
     const cleanPath = this.currentUrl.split('?')[0].split('#')[0];
     return cleanPath.startsWith(path);
+  }
+
+  toggleDropdown(event: MouseEvent): void {
+    event.stopPropagation();
+    this.dropdownOpen = !this.dropdownOpen;
+  }
+
+  closeDropdown(): void {
+    this.dropdownOpen = false;
+  }
+
+  openPremiumModal(): void {
+    this.premiumModalService.open();
+  }
+
+  async logout(): Promise<void> {
+    await this.authService.logout();
+    this.router.navigate(['/login']);
   }
 }

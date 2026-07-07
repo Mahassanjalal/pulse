@@ -1,9 +1,11 @@
 import { Component } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs/operators';
+import { PremiumModalService } from './core/services/premium-modal.service';
 
 @Component({
   selector: 'app-root',
+  standalone: false,
   template: `
     <div class="min-h-screen bg-background text-on-surface overflow-x-hidden">
       <!-- Authenticated shell layout -->
@@ -30,6 +32,9 @@ import { filter } from 'rxjs/operators';
           <router-outlet></router-outlet>
         </main>
       </ng-container>
+
+      <!-- Premium Modal -->
+      <pulse-premium-modal *ngIf="premiumModalOpen$ | async" (closeModal)="closePremiumModal()"></pulse-premium-modal>
     </div>
   `,
   styles: []
@@ -38,15 +43,19 @@ export class AppComponent {
   showAuthenticatedLayout = false;
   showVideoChatLayout = false;
   showPublicLayout = true;
+  premiumModalOpen$ = this.premiumModalService.open$;
 
   private readonly protectedRoutes = [
     '/dashboard', '/messages', '/friends', '/profile',
     '/settings', '/discover', '/notifications'
   ];
   private readonly videoRoutes = ['/video'];
-  private readonly publicRoutes = ['/', '/login', '/register', '/about', '/premium'];
+  private readonly publicRoutes = ['/', '/login', '/register', '/about'];
 
-  constructor(private router: Router) {
+  constructor(
+    private router: Router,
+    private premiumModalService: PremiumModalService
+  ) {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
@@ -63,5 +72,9 @@ export class AppComponent {
     this.showVideoChatLayout = isVideo;
     this.showAuthenticatedLayout = isProtected && !isVideo;
     this.showPublicLayout = !isVideo && !isProtected;
+  }
+
+  closePremiumModal(): void {
+    this.premiumModalService.close();
   }
 }

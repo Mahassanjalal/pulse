@@ -82,7 +82,7 @@
                 </button>
               </ng-container>
               <ng-template #premiumRequired>
-                <button [routerLink]="['/premium']" class="px-sm py-xs bg-primary/20 text-primary rounded-full font-label text-label-xs hover:brightness-110 transition-all">
+                <button (click)="openPremiumModal()" class="px-sm py-xs bg-primary/20 text-primary rounded-full font-label text-label-xs hover:brightness-110 transition-all">
                   Premium
                 </button>
                 <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
