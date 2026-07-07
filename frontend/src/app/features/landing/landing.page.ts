@@ -6,13 +6,6 @@ import { Component, HostListener } from '@angular/core';
   styles: []
 })
 export class LandingPageComponent {
-  scrolled = false;
-
-  @HostListener('window:scroll')
-  onScroll(): void {
-    this.scrolled = window.scrollY > 50;
-  }
-
   @HostListener('document:mousemove', ['$event'])
   onMouseMove(e: MouseEvent): void {
     const x = e.clientX / window.innerWidth - 0.5;

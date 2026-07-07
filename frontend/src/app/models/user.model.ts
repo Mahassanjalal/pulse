@@ -14,6 +14,7 @@ export interface User {
   interests: string[];
   isVerified: boolean;
   isPremium: boolean;
+  isGuest?: boolean;
   onlineStatus: 'online' | 'offline' | 'away';
   lastSeen?: Date;
   friendsCount: number;

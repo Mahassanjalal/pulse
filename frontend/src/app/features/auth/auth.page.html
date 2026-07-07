@@ -50,16 +50,21 @@
       </div>
 
       <!-- Form -->
-      <form class="space-y-md">
+      <form class="space-y-md" (ngSubmit)="onSubmit()">
         <div *ngIf="mode === 'register'" class="space-y-sm">
           <label class="font-label text-label-md text-on-surface-variant px-1">Display Name</label>
           <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
-            placeholder="Your name" type="text"/>
+            placeholder="Your name" type="text" [(ngModel)]="displayName" name="displayName"/>
+        </div>
+        <div *ngIf="mode === 'register'" class="space-y-sm">
+          <label class="font-label text-label-md text-on-surface-variant px-1">Username</label>
+          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            placeholder="username" type="text" [(ngModel)]="username" name="username"/>
         </div>
         <div class="space-y-sm">
-          <label class="font-label text-label-md text-on-surface-variant px-1">Email or Phone</label>
+          <label class="font-label text-label-md text-on-surface-variant px-1">Email</label>
           <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
-            placeholder="name@email.com" type="text"/>
+            placeholder="name@email.com" type="email" [(ngModel)]="email" name="email"/>
         </div>
         <div class="space-y-sm">
           <div class="flex justify-between items-center px-1">
@@ -67,10 +72,11 @@
             <a *ngIf="mode === 'login'" class="text-secondary font-label text-label-sm hover:underline" href="#">Forgot?</a>
           </div>
           <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
-            placeholder="••••••••" type="password"/>
+            placeholder="••••••••" type="password" [(ngModel)]="password" name="password"/>
         </div>
-        <button class="w-full h-14 bg-primary text-on-primary font-headline text-headline-md rounded-xl neon-glow-primary transition-all hover:brightness-110 active:scale-[0.98] mt-lg" type="submit">
-          {{ mode === 'login' ? 'Continue' : 'Join Pulse' }}
+        <div *ngIf="error" class="text-error text-sm text-center">{{ error }}</div>
+        <button class="w-full h-14 bg-primary text-on-primary font-headline text-headline-md rounded-xl neon-glow-primary transition-all hover:brightness-110 active:scale-[0.98] mt-lg" type="submit" [disabled]="loading">
+          {{ loading ? 'Please wait...' : (mode === 'login' ? 'Continue' : 'Join Pulse') }}
         </button>
       </form>
 

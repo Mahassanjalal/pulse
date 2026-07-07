@@ -6,6 +6,7 @@ import { SidebarComponent } from './components/sidebar/sidebar.component';
 import { BottomNavComponent } from './components/bottom-nav/bottom-nav.component';
 import { VideoChatShellComponent } from './components/video-chat-shell/video-chat-shell.component';
 import { SidebarToggleComponent } from './components/sidebar-toggle/sidebar-toggle.component';
+import { PublicHeaderComponent } from './components/public-header/public-header.component';
 
 @NgModule({
   declarations: [
@@ -13,7 +14,8 @@ import { SidebarToggleComponent } from './components/sidebar-toggle/sidebar-togg
     SidebarComponent,
     BottomNavComponent,
     VideoChatShellComponent,
-    SidebarToggleComponent
+    SidebarToggleComponent,
+    PublicHeaderComponent
   ],
   imports: [CommonModule, RouterModule],
   exports: [
@@ -21,7 +23,8 @@ import { SidebarToggleComponent } from './components/sidebar-toggle/sidebar-togg
     SidebarComponent,
     BottomNavComponent,
     VideoChatShellComponent,
-    SidebarToggleComponent
+    SidebarToggleComponent,
+    PublicHeaderComponent
   ]
 })
 export class ShellModule {}

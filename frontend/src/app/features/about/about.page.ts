@@ -7,23 +7,7 @@ import { SharedModule } from '@shared/shared.module';
   selector: 'pulse-about',
   template: `
     <div class="min-h-screen bg-background text-on-surface overflow-x-hidden">
-      <!-- TopAppBar -->
-      <header class="fixed top-0 right-0 left-0 z-50 flex items-center justify-between px-xl bg-surface/60 backdrop-blur-lg border-b border-white/10 w-full h-20">
-        <div class="flex items-center gap-md">
-          <a routerLink="/" class="font-display-lg text-headline-md font-black text-primary tracking-tighter">Pulse</a>
-          <nav class="hidden md:flex items-center gap-lg ml-xl">
-            <a routerLink="/" class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all">Discover</a>
-            <a routerLink="/about" class="font-label-md text-label-md text-primary border-b-2 border-primary pb-1">About Us</a>
-            <a routerLink="/premium" class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all">Premium</a>
-            <a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" href="#">Support</a>
-          </nav>
-        </div>
-        <div class="flex items-center gap-md">
-          <button routerLink="/login" class="bg-primary px-lg py-sm rounded-full font-label-md text-label-md text-on-primary font-bold active:scale-95 transition-all neon-glow-primary">Go Live</button>
-        </div>
-      </header>
-
-      <main class="pt-20">
+      <main>
         <!-- Hero -->
         <section class="relative min-h-[600px] flex items-center justify-center overflow-hidden">
           <div class="absolute inset-0">
@@ -170,15 +154,15 @@ import { SharedModule } from '@shared/shared.module';
           <div>
             <h6 class="font-bold text-white mb-md">Platform</h6>
             <ul class="space-y-sm text-on-surface-variant font-label-md text-label-md">
-              <li><a class="hover:text-primary transition-colors" href="#">Discover</a></li>
+              <li><a class="hover:text-primary transition-colors" routerLink="/discover">Discover</a></li>
               <li><a class="hover:text-primary transition-colors" href="#">Safety Center</a></li>
-              <li><a class="hover:text-primary transition-colors" href="#">Premium Perks</a></li>
+              <li><a class="hover:text-primary transition-colors" routerLink="/premium">Premium Perks</a></li>
             </ul>
           </div>
           <div>
             <h6 class="font-bold text-white mb-md">Company</h6>
             <ul class="space-y-sm text-on-surface-variant font-label-md text-label-md">
-              <li><a class="hover:text-primary transition-colors" href="#">About Us</a></li>
+              <li><a class="hover:text-primary transition-colors" routerLink="/about">About Us</a></li>
               <li><a class="hover:text-primary transition-colors" href="#">Careers</a></li>
               <li><a class="hover:text-primary transition-colors" href="#">Press Kit</a></li>
             </ul>
@@ -193,7 +177,7 @@ import { SharedModule } from '@shared/shared.module';
           </div>
         </div>
         <div class="max-w-6xl mx-auto mt-xl pt-lg border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-md">
-          <p class="font-label-sm text-label-sm text-on-surface-variant">2024 Pulse Discovery Inc. All rights reserved.</p>
+          <p class="font-label-sm text-label-sm text-on-surface-variant">&copy; 2025 Pulse Discovery Inc. All rights reserved.</p>
           <div class="flex gap-md">
             <span class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all cursor-pointer"><span class="material-symbols-outlined text-md">public</span></span>
             <span class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all cursor-pointer"><span class="material-symbols-outlined text-md">alternate_email</span></span>

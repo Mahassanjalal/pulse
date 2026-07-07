@@ -8,11 +8,276 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-
+  id          String @id @default(uuid())
+  email       String @unique
+  password    String
+  username    String @unique
+  displayName String?
+  
+  age                 Int?
+  gender              String?
+  bio                 String?
+  country             String?
+  languages           String @default("[]")
+  interests           String @default("[]")
+  profilePicture      String?
+  coverImage          String?
+  
+  status              String @default("OFFLINE")
+  lastSeen            DateTime?
+  isVerified          Boolean @default(false)
+  isPremium           Boolean @default(false)
+  isGuest             Boolean @default(false)
+  premiumUntil        DateTime?
+  
+  friendsCount        Int @default(0)
+  totalConversations  Int @default(0)
+  trustScore          Int @default(50)
+  verificationLevel   Int @default(0)
+  communityRating     Float @default(0)
+  coins               Int @default(0)
+  dailyStreak         Int @default(0)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  role String @default("USER")
+  
+  privacySettings       PrivacySettings?
+  preferences           UserPreferences?
+  achievements          UserAchievement[]
+  sentMessages          Message[] @relation("SentMessages")
+  receivedMessages      Message[] @relation("ReceivedMessages")
+  matchesAsUser1        Match[] @relation("User1Matches")
+  matchesAsUser2        Match[] @relation("User2Matches")
+  friendsSent           Friend[] @relation("SentFriends")
+  friendsReceived       Friend[] @relation("ReceivedFriends")
+  friendRequestsSent    FriendRequest[] @relation("SentFriendRequests")
+  friendRequestsReceived FriendRequest[] @relation("ReceivedFriendRequests")
+  notifications         Notification[]
+  reportsMade           Report[] @relation("ReportsMade")
+  reportsReceived       Report[] @relation("ReportsReceived")
+  subscription          Subscription?
+  blockedUsers          BlockedUser[]
+  loginHistory          LoginHistory[]
+  refreshTokens         RefreshToken[]
+  profileViews          ProfileView[]
+  profileVisitors       ProfileView[] @relation("ProfileVisitors")
+}
+
+model PrivacySettings {
+  id          String @id @default(uuid())
+  userId      String @unique
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  hideAge             Boolean @default(false)
+  hideCountry         Boolean @default(false)
+  hideOnlineStatus    Boolean @default(false)
+  hideProfilePicture  Boolean @default(false)
+  privateProfile      Boolean @default(false)
+}
+
+model UserPreferences {
+  id          String @id @default(uuid())
+  userId      String @unique
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  genderPreference    String?
+  countryPreference   String?
+  languagePreference  String?
+  ageRangeMin         Int @default(18)
+  ageRangeMax         Int @default(99)
+  interestsMatch      Boolean @default(true)
+  verifiedOnly        Boolean @default(false)
+  premiumOnly         Boolean @default(false)
+  invisibleMode       Boolean @default(false)
+}
+
+model RefreshToken {
+  id        String @id @default(uuid())
+  token     String @unique
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Match {
+  id          String @id @default(uuid())
+  
+  user1Id     String
+  user1       User @relation("User1Matches", fields: [user1Id], references: [id], onDelete: Cascade)
+  
+  user2Id     String
+  user2       User @relation("User2Matches", fields: [user2Id], references: [id], onDelete: Cascade)
+  
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  duration    Int?
+  status      String @default("PENDING")
+  
+  mutualInterests String @default("[]")
+  isFavorite      Boolean @default(false)
+  canReconnect    Boolean @default(true)
+  reconnectCount  Int @default(0)
+  
+  messages    Message[]
+  
+  createdAt   DateTime @default(now())
+}
+
+model Message {
+  id        String @id @default(uuid())
+  matchId   String
+  match     Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  
+  senderId  String
+  sender    User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId String
+  receiver   User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  content    String
+  type       String @default("TEXT")
+  
+  read       Boolean @default(false)
+  readAt     DateTime?
+  deleted    Boolean @default(false)
+  
+  createdAt  DateTime @default(now())
+}
+
+model Friend {
+  id          String @id @default(uuid())
+  senderId    String
+  sender      User @relation("SentFriends", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId  String
+  receiver    User @relation("ReceivedFriends", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  isFavorite  Boolean @default(false)
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([senderId, receiverId])
+}
+
+model FriendRequest {
+  id          String @id @default(uuid())
+  fromUserId  String
+  fromUser    User @relation("SentFriendRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  
+  toUserId    String
+  toUser      User @relation("ReceivedFriendRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  
+  status      String @default("PENDING")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([fromUserId, toUserId])
+}
+
+model Notification {
+  id        String @id @default(uuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type      String
+  title     String
+  message   String
+  read      Boolean @default(false)
+  data      String?
+  
+  createdAt DateTime @default(now())
+}
+
+model BlockedUser {
+  id          String @id @default(uuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  blockedUserId String
+  reason        String?
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([userId, blockedUserId])
+}
+
+model Report {
+  id              String @id @default(uuid())
+  reporterId      String
+  reporter        User @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  
+  reportedUserId  String
+  reportedUser    User @relation("ReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  
+  category        String
+  description     String
+  status          String @default("PENDING")
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Subscription {
+  id          String @id @default(uuid())
+  userId      String @unique
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  planType    String
+  price       Float
+  period      String
+  features    String @default("[]")
+  
+  startDate   DateTime @default(now())
+  endDate     DateTime?
+  isActive    Boolean @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LoginHistory {
+  id          String @id @default(uuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  ipAddress   String?
+  userAgent   String?
+  device      String?
+  
+  createdAt   DateTime @default(now())
+}
+
+model ProfileView {
+  id          String @id @default(uuid())
+  viewerId    String
+  viewer      User @relation("ProfileVisitors", fields: [viewerId], references: [id], onDelete: Cascade)
+  
+  viewedUserId String
+  viewedUser   User @relation(fields: [viewedUserId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now())
+  
+  @@unique([viewerId, viewedUserId])
+}
+
+model UserAchievement {
+  id          String @id @default(uuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String
+  icon        String
+  unlocked    Boolean @default(false)
+  unlockedAt  DateTime?
+  progress    Int @default(0)
+  maxProgress Int @default(1)
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([userId, name])
 }

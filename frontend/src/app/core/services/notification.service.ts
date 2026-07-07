@@ -1,9 +1,11 @@
 import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { environment } from '@env/environment';
 
 export interface NotificationItem {
   id: string;
-  type: 'friend_request' | 'friend_accepted' | 'message' | 'like' | 'profile_view' | 'premium_offer' | 'daily_reward' | 'warning' | 'report' | 'new_feature';
+  type: string;
   title: string;
   message: string;
   unread: boolean;
@@ -18,6 +20,8 @@ export class NotificationService {
   private notifications = new BehaviorSubject<NotificationItem[]>([]);
   private unreadCount = new BehaviorSubject<number>(0);
 
+  constructor(private http: HttpClient) {}
+
   get notifications$(): Observable<NotificationItem[]> {
     return this.notifications.asObservable();
   }
@@ -26,54 +30,50 @@ export class NotificationService {
     return this.unreadCount.asObservable();
   }
 
+  loadNotifications(page = 1, limit = 20): void {
+    this.http.get<{ notifications: NotificationItem[]; unreadCount: number }>(`${environment.apiUrl}/notifications?page=${page}&limit=${limit}`).subscribe({
+      next: (res) => {
+        this.notifications.next(res.notifications);
+        this.unreadCount.next(res.unreadCount);
+      },
+      error: () => {
+        this.notifications.next([]);
+        this.unreadCount.next(0);
+      }
+    });
+  }
+
   addNotification(notification: NotificationItem): void {
     const current = this.notifications.value;
     this.notifications.next([notification, ...current]);
     if (!notification.unread) {
-      this.unreadCount.next(current.filter(n => !n.unread).length + 1);
+      this.unreadCount.next(this.unreadCount.value + 1);
     }
   }
 
   markAsRead(id: string): void {
-    const current = this.notifications.value;
-    const updated = current.map(n => n.id === id ? { ...n, unread: false } : n);
-    this.notifications.next(updated);
-    this.unreadCount.next(updated.filter(n => !n.unread).length);
+    this.http.post(`${environment.apiUrl}/notifications/${id}/read`, {}).subscribe({
+      next: () => {
+        const current = this.notifications.value;
+        const updated = current.map(n => n.id === id ? { ...n, unread: false } : n);
+        this.notifications.next(updated);
+        this.unreadCount.next(updated.filter(n => n.unread).length);
+      }
+    });
   }
 
   markAllAsRead(): void {
-    const current = this.notifications.value;
-    const updated = current.map(n => ({ ...n, unread: false }));
-    this.notifications.next(updated);
-    this.unreadCount.next(0);
+    this.http.post(`${environment.apiUrl}/notifications/read-all`, {}).subscribe({
+      next: () => {
+        const updated = this.notifications.value.map(n => ({ ...n, unread: false }));
+        this.notifications.next(updated);
+        this.unreadCount.next(0);
+      }
+    });
   }
 
   clearAll(): void {
     this.notifications.next([]);
     this.unreadCount.next(0);
-  }
-
-  sendFriendRequestNotification(userId: string, userName: string): void {
-    this.addNotification({
-      id: Math.random().toString(),
-      type: 'friend_request',
-      title: 'New Friend Request',
-      message: `${userName} sent you a friend request`,
-      unread: true,
-      timestamp: new Date(),
-      data: { userId }
-    });
-  }
-
-  sendMessageNotification(userId: string, userName: string, message: string): void {
-    this.addNotification({
-      id: Math.random().toString(),
-      type: 'message',
-      title: 'New Message',
-      message,
-      unread: true,
-      timestamp: new Date(),
-      data: { userId }
-    });
   }
 }

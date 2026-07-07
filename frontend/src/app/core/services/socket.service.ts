@@ -1,48 +1,113 @@
 import { Injectable } from '@angular/core';
+import { io, Socket } from 'socket.io-client';
+import { Observable, Subject } from 'rxjs';
+import { environment } from '@env/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SocketService {
-  private socket: any = null;
+  private socket: Socket | null = null;
+  private connectionState$ = new Subject<'connected' | 'disconnected' | 'reconnecting'>();
+  private eventHandlers = new Map<string, Subject<any>>();
 
-  init(url: string, config: any = {}): void { }
+  connect(): void {
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    if (!token || !userId) return;
 
-  connect(): void { }
+    this.socket = io(environment.wsUrl, {
+      auth: { token, userId },
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 10,
+    });
 
-  disconnect(): void { }
+    this.socket.on('connect', () => this.connectionState$.next('connected'));
+    this.socket.on('disconnect', () => this.connectionState$.next('disconnected'));
+    this.socket.on('reconnect_attempt', () => this.connectionState$.next('reconnecting'));
 
-  on(event: string, callback: (...args: any[]) => void): void { }
+    const events = [
+      'match_found', 'match_skipped', 'match_ended', 'matching', 'matching_queue', 'matching_cancelled',
+      'webrtc_offer', 'webrtc_answer', 'webrtc_candidate',
+      'match_message', 'match_message_sent', 'peer_typing',
+      'friend_request_notification', 'friend_request_received', 'friend_request_accepted', 'friend_added',
+      'notification',
+    ];
 
-  emit(event: string, data?: any): void { }
-
-  auth(token: string): void { }
-
-  joinRoom(roomId: string): void { }
-
-  leaveRoom(roomId: string): void { }
-
-  isConnected(): boolean {
-    return false;
+    events.forEach(event => {
+      const subject = new Subject<any>();
+      this.eventHandlers.set(event, subject);
+      this.socket?.on(event, (data: any) => subject.next(data));
+    });
   }
 
-  onConnect(callback: () => void): void { }
+  disconnect(): void {
+    this.socket?.disconnect();
+    this.socket = null;
+    this.eventHandlers.forEach(s => s.complete());
+    this.eventHandlers.clear();
+  }
 
-  onDisconnect(callback: () => void): void { }
+  on(event: string): Observable<any> {
+    if (!this.eventHandlers.has(event)) {
+      const subject = new Subject<any>();
+      this.eventHandlers.set(event, subject);
+      this.socket?.on(event, (data: any) => subject.next(data));
+    }
+    return this.eventHandlers.get(event)!.asObservable();
+  }
 
-  onReconnect(callback: () => void): void { }
+  emit(event: string, data?: any): void {
+    this.socket?.emit(event, data);
+  }
 
-  onMatchFound(data: any): void { }
+  isConnected(): boolean {
+    return this.socket?.connected || false;
+  }
 
-  onMatchEnded(data: any): void { }
+  getConnectionState(): Observable<'connected' | 'disconnected' | 'reconnecting'> {
+    return this.connectionState$.asObservable();
+  }
 
-  onMessage(data: any): void { }
+  startMatching(filters?: any): void {
+    this.emit('start_matching', { filters });
+  }
 
-  onUserTyping(data: any): void { }
+  cancelMatching(): void {
+    this.emit('cancel_matching');
+  }
 
-  onReaction(data: any): void { }
+  sendOffer(matchId: string, offer: RTCSessionDescriptionInit): void {
+    this.emit('webrtc_offer', { matchId, offer });
+  }
 
-  onUserOnline(data: any): void { }
+  sendAnswer(matchId: string, answer: RTCSessionDescriptionInit): void {
+    this.emit('webrtc_answer', { matchId, answer });
+  }
 
-  onUserOffline(data: any): void { }
+  sendCandidate(matchId: string, candidate: RTCIceCandidateInit): void {
+    this.emit('webrtc_candidate', { matchId, candidate });
+  }
+
+  sendMatchMessage(matchId: string, content: string, type = 'TEXT'): void {
+    this.emit('send_match_message', { matchId, content, type });
+  }
+
+  sendTyping(matchId: string, isTyping: boolean): void {
+    this.emit('typing', { matchId, isTyping });
+  }
+
+  skipMatch(matchId: string): void {
+    this.emit('skip_match', { matchId });
+  }
+
+  endMatch(matchId: string): void {
+    this.emit('end_match', { matchId });
+  }
+
+  sendFriendRequest(toUserId: string): void {
+    this.emit('add_friend', { peerId: toUserId });
+  }
 }

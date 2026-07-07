@@ -23,9 +23,12 @@ import { filter } from 'rxjs/operators';
         <router-outlet></router-outlet>
       </ng-container>
 
-      <!-- Public layout (no shell) -->
+      <!-- Public layout with public header -->
       <ng-container *ngIf="showPublicLayout">
-        <router-outlet></router-outlet>
+        <pulse-public-header />
+        <main class="pt-20">
+          <router-outlet></router-outlet>
+        </main>
       </ng-container>
     </div>
   `,
@@ -38,10 +41,10 @@ export class AppComponent {
 
   private readonly protectedRoutes = [
     '/dashboard', '/messages', '/friends', '/profile',
-    '/settings', '/discover', '/premium', '/notifications'
+    '/settings', '/discover', '/notifications'
   ];
   private readonly videoRoutes = ['/video'];
-  private readonly publicRoutes = ['/', '/login', '/register', '/about'];
+  private readonly publicRoutes = ['/', '/login', '/register', '/about', '/premium'];
 
   constructor(private router: Router) {
     this.router.events.pipe(
@@ -55,7 +58,7 @@ export class AppComponent {
     const path = url.split('?')[0].split('#')[0];
     const isVideo = this.videoRoutes.some(r => path.startsWith(r));
     const isProtected = this.protectedRoutes.some(r => path.startsWith(r));
-    const isPublic = this.publicRoutes.some(r => path === r || path === r + '/');
+    const isPublic = this.publicRoutes.some(r => path === r || path.startsWith(r + '/'));
 
     this.showVideoChatLayout = isVideo;
     this.showAuthenticatedLayout = isProtected && !isVideo;

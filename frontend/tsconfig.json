@@ -29,7 +29,8 @@
       "@shell/*": ["src/app/shell/*"],
       "@features/*": ["src/app/features/*"],
       "@models/*": ["src/app/models/*"],
-      "@app/*": ["src/app/*"]
+      "@app/*": ["src/app/*"],
+      "@env/*": ["src/environments/*"]
     }
   },
   "angularCompilerOptions": {

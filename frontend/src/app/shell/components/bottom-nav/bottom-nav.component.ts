@@ -1,33 +1,62 @@
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, NavigationEnd } from '@angular/router';
+import { filter } from 'rxjs/operators';
 
 @Component({
   selector: 'pulse-bottom-nav',
   template: `
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/80 backdrop-blur-xl flex items-center justify-around px-lg z-50 border-t border-white/10">
-      <a routerLink="/dashboard" class="flex flex-col items-center" routerLinkActive="!active">
-        <span class="material-symbols-outlined text-on-surface">home</span>
-        <span class="font-label-sm text-label-sm mt-1">Home</span>
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/90 backdrop-blur-xl flex items-center justify-around px-2 z-50 border-t border-white/5">
+      <a *ngFor="let item of navItems"
+         [routerLink]="item.route"
+         class="bottom-nav-item"
+         [class.active]="isActive(item.route)">
+        <span class="material-symbols-outlined text-[22px]" [class]="isActive(item.route) ? 'text-primary' : ''">{{ item.icon }}</span>
+        <span class="text-[10px] mt-0.5">{{ item.label }}</span>
       </a>
-      <a routerLink="/discover" class="flex flex-col items-center" routerLinkActive="!active">
-        <span class="material-symbols-outlined text-on-surface-variant">explore</span>
-        <span class="font-label-sm text-label-sm mt-1">Explore</span>
-      </a>
-      <a routerLink="/video/random" class="flex flex-col items-center -mt-6">
-        <div class="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/40 text-on-primary">
-          <span class="material-symbols-outlined">add</span>
+      <a routerLink="/video" class="flex flex-col items-center -mt-5">
+        <div class="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/40 text-on-primary active:scale-90 transition-transform">
+          <span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">add</span>
         </div>
-      </a>
-      <a routerLink="/messages" class="flex flex-col items-center" routerLinkActive="!active">
-        <span class="material-symbols-outlined text-on-surface-variant">chat</span>
-        <span class="font-label-sm text-label-sm mt-1">Messages</span>
-      </a>
-      <a routerLink="/profile" class="flex flex-col items-center" routerLinkActive="!active">
-        <span class="material-symbols-outlined text-on-surface-variant">person</span>
-        <span class="font-label-sm text-label-sm mt-1">Profile</span>
       </a>
     </nav>
   `,
-  styles: []
+  styles: [`
+    .bottom-nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 0;
+      color: var(--color-on-surface-variant);
+      text-decoration: none;
+      transition: all 0.2s ease;
+      min-width: 48px;
+    }
+    .bottom-nav-item.active {
+      color: var(--color-primary);
+    }
+  `]
 })
-export class BottomNavComponent {}
+export class BottomNavComponent {
+  currentUrl = '/dashboard';
+
+  navItems = [
+    { icon: 'home', label: 'Home', route: '/dashboard' },
+    { icon: 'explore', label: 'Explore', route: '/discover' },
+    { icon: 'chat', label: 'Messages', route: '/messages' },
+    { icon: 'person', label: 'Profile', route: '/profile' },
+  ];
+
+  constructor(private router: Router) {
+    this.router.events.pipe(
+      filter(event => event instanceof NavigationEnd)
+    ).subscribe((event: any) => {
+      this.currentUrl = event.urlAfterRedirects || event.url;
+    });
+  }
+
+  isActive(path: string): boolean {
+    const cleanPath = this.currentUrl.split('?')[0].split('#')[0];
+    if (path === '/dashboard') return cleanPath === '/dashboard';
+    return cleanPath.startsWith(path);
+  }
+}

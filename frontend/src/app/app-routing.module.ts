@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Routes } from '@angular/router';
+import { AuthGuard, GuestGuard } from './core/guards/auth.guard';
 
 const routes: Routes = [
   {
@@ -14,30 +15,36 @@ const routes: Routes = [
   },
   {
     path: 'login',
-    loadChildren: () => import('./features/auth/auth.module').then(m => m.AuthModule)
+    loadChildren: () => import('./features/auth/auth.module').then(m => m.AuthModule),
+    canActivate: [GuestGuard]
   },
   {
     path: 'register',
-    loadChildren: () => import('./features/auth/auth.module').then(m => m.AuthModule)
+    loadChildren: () => import('./features/auth/auth.module').then(m => m.AuthModule),
+    canActivate: [GuestGuard]
   },
   {
     path: 'dashboard',
     loadChildren: () => import('./features/dashboard/dashboard.module').then(m => m.DashboardModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {
     path: 'messages',
     loadChildren: () => import('./features/messages/messages.module').then(m => m.MessagesModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {
     path: 'friends',
     loadChildren: () => import('./features/friends/friends.module').then(m => m.FriendsModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {
     path: 'profile',
     loadChildren: () => import('./features/profile/profile.module').then(m => m.ProfileModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {
@@ -48,22 +55,24 @@ const routes: Routes = [
   {
     path: 'video',
     loadChildren: () => import('./features/video-chat/video-chat.module').then(m => m.VideoChatModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {
     path: 'discover',
     loadChildren: () => import('./features/discover/discover.module').then(m => m.DiscoverModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {
     path: 'settings',
     loadChildren: () => import('./features/settings/settings.module').then(m => m.SettingsModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {
     path: 'premium',
-    loadChildren: () => import('./features/premium/premium.module').then(m => m.PremiumModule),
-    data: { layout: 'authenticated' }
+    loadChildren: () => import('./features/premium/premium.module').then(m => m.PremiumModule)
   },
   {
     path: 'about',
@@ -72,6 +81,7 @@ const routes: Routes = [
   {
     path: 'notifications',
     loadChildren: () => import('./features/notifications/notifications.module').then(m => m.NotificationsModule),
+    canActivate: [AuthGuard],
     data: { layout: 'authenticated' }
   },
   {

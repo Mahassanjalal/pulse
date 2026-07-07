@@ -9,12 +9,16 @@
       </div>
     </div>
     <div class="flex items-center gap-sm">
-      <div class="flex items-center gap-xs bg-error/10 border border-error/20 px-md py-xs rounded-full">
+      <div *ngIf="status === 'matched'" class="flex items-center gap-xs bg-error/10 border border-error/20 px-md py-xs rounded-full">
         <span class="w-2 h-2 bg-error rounded-full pulse-animation"></span>
         <span class="font-label text-label-sm text-error uppercase tracking-wider">LIVE</span>
         <span class="font-label text-label-sm text-on-surface-variant">{{ matchTime }}</span>
       </div>
-      <a routerLink="/dashboard" class="p-sm rounded-full hover:bg-white/5 transition-all">
+      <div *ngIf="status === 'matching'" class="flex items-center gap-xs bg-primary/10 border border-primary/20 px-md py-xs rounded-full">
+        <span class="w-2 h-2 bg-primary rounded-full pulse-animation"></span>
+        <span class="font-label text-label-sm text-primary uppercase tracking-wider">SEARCHING...</span>
+      </div>
+      <a (click)="goBack()" class="p-sm rounded-full hover:bg-white/5 transition-all cursor-pointer">
         <span class="material-symbols-outlined text-on-surface-variant">close</span>
       </a>
     </div>
@@ -24,71 +28,91 @@
   <div class="flex flex-1 pt-16 overflow-hidden">
     <!-- Video Area -->
     <div class="flex-1 relative bg-surface-container-lowest overflow-hidden">
-      <!-- Peer Video (Main) -->
-      <div class="absolute inset-0">
-        <img class="w-full h-full object-cover" src="https://i.pravatar.cc/800?img=33" alt="Peer Video" />
-        <div class="absolute inset-0 border-2 border-secondary/30 neon-glow-cyan transition-transform duration-75"
-          [style.transform]="'translate(' + glowX + 'px, ' + glowY + 'px)'"></div>
+      <!-- Waiting/Idle State -->
+      <div *ngIf="status === 'idle'" class="absolute inset-0 flex flex-col items-center justify-center gap-lg">
+        <span class="material-symbols-outlined text-6xl text-on-surface-variant/30">videocam</span>
+        <h2 class="font-headline text-headline-lg text-on-surface">Ready to connect?</h2>
+        <p class="text-on-surface-variant text-body-lg">Start matching to meet someone new from around the world.</p>
+        <button (click)="startMatching()" class="px-xl py-lg bg-primary text-on-primary rounded-2xl font-headline text-headline-md flex items-center gap-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+          <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">videocam</span>
+          Start Matching
+        </button>
       </div>
 
-      <!-- User Info Overlay (Top) -->
-      <div class="absolute top-lg left-lg z-10 flex items-center gap-sm">
-        <div class="glass-panel px-md py-sm rounded-xl border border-white/10 flex items-center gap-sm">
-          <span class="material-symbols-outlined text-secondary text-sm">location_on</span>
-          <span class="font-label text-label-md text-on-surface">Paris, France 🇫🇷</span>
-        </div>
-        <div class="glass-panel px-sm py-sm rounded-xl border border-white/10 flex gap-xs">
-          <span class="bg-surface/60 px-sm py-1 rounded-full font-label text-label-sm text-secondary border border-secondary/30">#Music</span>
-          <span class="bg-surface/60 px-sm py-1 rounded-full font-label text-label-sm text-primary border border-primary/30">#Art</span>
-        </div>
+      <!-- Searching State -->
+      <div *ngIf="status === 'matching'" class="absolute inset-0 flex flex-col items-center justify-center gap-lg">
+        <div class="w-24 h-24 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+        <h2 class="font-headline text-headline-lg text-on-surface">Finding your match...</h2>
+        <p class="text-on-surface-variant">Looking for someone with similar interests</p>
+        <button (click)="matchingService.pauseMatching()" class="px-lg py-md glass-panel text-on-surface rounded-xl font-label text-label-md border border-white/10 hover:bg-white/10 transition-all">
+          Cancel
+        </button>
       </div>
 
-      <!-- Self PiP Video (Bottom Left) -->
-      <div class="absolute bottom-24 left-lg z-20 w-32 md:w-44 aspect-video rounded-2xl overflow-hidden border-2 border-surface shadow-xl">
-        <img class="w-full h-full object-cover" src="https://i.pravatar.cc/200?img=7" alt="Self Video" />
-        <div *ngIf="isMuted" class="absolute inset-0 flex items-center justify-center bg-black/50">
-          <span class="material-symbols-outlined text-error">mic_off</span>
+      <!-- Matched State -->
+      <ng-container *ngIf="status === 'matched' && currentPeer">
+        <!-- Peer Video (Main) -->
+        <div class="absolute inset-0">
+          <video #remoteVideo class="w-full h-full object-cover" autoplay playsinline></video>
+          <div class="absolute inset-0 border-2 border-secondary/30 neon-glow-cyan transition-transform duration-75"
+            [style.transform]="'translate(' + glowX + 'px, ' + glowY + 'px)'"></div>
         </div>
-        <div *ngIf="isCameraOff" class="absolute inset-0 bg-surface-container flex items-center justify-center">
-          <span class="material-symbols-outlined text-on-surface-variant text-3xl">videocam_off</span>
+
+        <!-- User Info Overlay (Top) -->
+        <div class="absolute top-lg left-lg z-10 flex items-center gap-sm">
+          <div class="glass-panel px-md py-sm rounded-xl border border-white/10 flex items-center gap-sm">
+            <span class="material-symbols-outlined text-secondary text-sm">location_on</span>
+            <span class="font-label text-label-md text-on-surface">{{ currentPeer.location }}</span>
+          </div>
+          <div class="glass-panel px-sm py-sm rounded-xl border border-white/10 flex gap-xs">
+            <span *ngFor="let interest of currentPeer.interests?.slice(0, 2)" class="bg-surface/60 px-sm py-1 rounded-full font-label text-label-sm text-secondary border border-secondary/30">#{{ interest }}</span>
+          </div>
         </div>
-      </div>
+
+        <!-- Self PiP Video (Bottom Left) -->
+        <div class="absolute bottom-24 left-lg z-20 w-32 md:w-44 aspect-video rounded-2xl overflow-hidden border-2 border-surface shadow-xl">
+          <video #localVideo class="w-full h-full object-cover" autoplay playsinline muted></video>
+          <div *ngIf="isMuted" class="absolute inset-0 flex items-center justify-center bg-black/50">
+            <span class="material-symbols-outlined text-error">mic_off</span>
+          </div>
+          <div *ngIf="isCameraOff" class="absolute inset-0 bg-surface-container flex items-center justify-center">
+            <span class="material-symbols-outlined text-on-surface-variant text-3xl">videocam_off</span>
+          </div>
+        </div>
+      </ng-container>
 
       <!-- Control Bar (Bottom) -->
       <div class="absolute bottom-0 left-0 right-0 p-lg flex items-center justify-between z-20">
         <div class="flex items-center gap-sm">
           <!-- Mute -->
-          <button (click)="isMuted = !isMuted"
+          <button (click)="toggleMute()"
             class="w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95"
             [ngClass]="isMuted ? 'bg-error/20 border border-error/40 text-error' : 'glass-panel border border-white/10 text-on-surface hover:bg-white/10'">
             <span class="material-symbols-outlined">{{ isMuted ? 'mic_off' : 'mic' }}</span>
           </button>
           <!-- Camera -->
-          <button (click)="isCameraOff = !isCameraOff"
+          <button (click)="toggleCamera()"
             class="w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95"
             [ngClass]="isCameraOff ? 'bg-error/20 border border-error/40 text-error' : 'glass-panel border border-white/10 text-on-surface hover:bg-white/10'">
-            <span class="material-symbols-outlined">{{ isCameraOff ? 'videocam_off' : 'videocam' }}</span>
-          </button>
-          <!-- Effects -->
-          <button class="w-12 h-12 rounded-full glass-panel border border-white/10 text-on-surface-variant flex items-center justify-center hover:bg-white/10 transition-all active:scale-95">
-            <span class="material-symbols-outlined">auto_awesome</span>
+            <span class="material-symbols-outlined">{{ isCameraOff ? 'videcam_off' : 'videocam' }}</span>
           </button>
         </div>
 
         <!-- Skip / End -->
-        <button class="px-xl py-md bg-primary text-on-primary rounded-full font-headline text-headline-md flex items-center gap-sm neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
-          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">skip_next</span>
-          Next Match
-        </button>
+        <div class="flex items-center gap-md">
+          <button *ngIf="status === 'matched'" (click)="skipMatch()" class="px-xl py-md bg-primary text-on-primary rounded-full font-headline text-headline-md flex items-center gap-sm neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">skip_next</span>
+            Next Match
+          </button>
+          <button *ngIf="status === 'matched'" (click)="endMatch()" class="px-lg py-md bg-error/20 text-error border border-error/40 rounded-full font-headline text-headline-md flex items-center gap-sm hover:bg-error/30 active:scale-95 transition-all">
+            <span class="material-symbols-outlined">call_end</span>
+          </button>
+        </div>
 
         <div class="flex items-center gap-sm">
           <!-- Add Friend -->
-          <button class="w-12 h-12 rounded-full glass-panel border border-white/10 text-tertiary flex items-center justify-center hover:bg-tertiary/10 transition-all active:scale-95">
+          <button *ngIf="status === 'matched'" (click)="addFriend()" class="w-12 h-12 rounded-full glass-panel border border-white/10 text-tertiary flex items-center justify-center hover:bg-tertiary/10 transition-all active:scale-95">
             <span class="material-symbols-outlined">person_add</span>
-          </button>
-          <!-- Report -->
-          <button class="w-12 h-12 rounded-full glass-panel border border-white/10 text-on-surface-variant flex items-center justify-center hover:bg-error/10 hover:text-error transition-all active:scale-95">
-            <span class="material-symbols-outlined">flag</span>
           </button>
           <!-- Toggle Chat -->
           <button (click)="chatOpen = !chatOpen" class="w-12 h-12 rounded-full glass-panel border border-white/10 text-secondary flex items-center justify-center hover:bg-secondary/10 transition-all active:scale-95">
@@ -99,7 +123,7 @@
     </div>
 
     <!-- Chat Panel (Right) -->
-    <div *ngIf="chatOpen" class="w-80 flex flex-col border-l border-white/10 bg-surface/60 backdrop-blur-xl hidden md:flex">
+    <div *ngIf="chatOpen && status === 'matched'" class="w-80 flex flex-col border-l border-white/10 bg-surface/60 backdrop-blur-xl hidden md:flex">
       <div class="p-md border-b border-white/10">
         <h3 class="font-headline text-headline-md text-on-surface">Live Chat</h3>
       </div>
@@ -115,9 +139,10 @@
       </div>
       <div class="p-md border-t border-white/10 flex gap-sm">
         <input [(ngModel)]="newChatMessage"
+          (keyup.enter)="sendChatMessage()"
           class="flex-1 bg-surface-container/40 border border-white/5 rounded-full py-sm px-md text-on-surface text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:border-secondary transition-all"
           placeholder="Message..." type="text" />
-        <button class="w-9 h-9 bg-secondary-container rounded-full flex items-center justify-center neon-glow-cyan hover:brightness-110 active:scale-95 transition-all">
+        <button (click)="sendChatMessage()" class="w-9 h-9 bg-secondary-container rounded-full flex items-center justify-center neon-glow-cyan hover:brightness-110 active:scale-95 transition-all">
           <span class="material-symbols-outlined text-on-secondary-container text-sm" style="font-variation-settings: 'FILL' 1;">send</span>
         </button>
       </div>

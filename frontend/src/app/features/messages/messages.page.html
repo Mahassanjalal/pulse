@@ -17,25 +17,25 @@
 
       <div class="overflow-y-auto flex-1">
         <div *ngFor="let conv of conversations"
-          (click)="activeChat = conv.id"
+          (click)="selectConversation(conv.id)"
           class="flex items-center gap-md p-md cursor-pointer transition-all border-b border-white/5"
           [ngClass]="activeChat === conv.id ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-white/5'">
           <div class="relative flex-shrink-0">
             <div class="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-              <img class="w-full h-full object-cover" [src]="conv.avatar" [alt]="conv.name" />
+              <img class="w-full h-full object-cover" [src]="conv.peer.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="conv.peer.displayName" />
             </div>
-            <span *ngIf="conv.online" class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface pulse-animation"></span>
+            <span *ngIf="conv.peer.status === 'ONLINE'" class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface pulse-animation"></span>
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between mb-xs">
-              <p class="font-label text-label-md text-on-surface truncate">{{ conv.name }}</p>
-              <span class="font-label text-label-sm text-on-surface-variant flex-shrink-0">{{ conv.time }}</span>
+              <p class="font-label text-label-md text-on-surface truncate">{{ conv.peer.displayName }}</p>
+              <span class="font-label text-label-sm text-on-surface-variant flex-shrink-0">{{ conv.lastMessage?.createdAt | date:'shortTime' }}</span>
             </div>
-            <p class="font-body text-body-md text-on-surface-variant truncate text-sm">{{ conv.lastMsg }}</p>
+            <p class="font-body text-body-md text-on-surface-variant truncate text-sm">{{ conv.lastMessage?.content || 'No messages yet' }}</p>
           </div>
-          <span *ngIf="conv.unread > 0"
+          <span *ngIf="conv.unreadCount > 0"
             class="w-5 h-5 bg-primary text-on-primary text-xs font-bold rounded-full flex items-center justify-center flex-shrink-0">
-            {{ conv.unread }}
+            {{ conv.unreadCount }}
           </span>
         </div>
       </div>
@@ -48,13 +48,13 @@
         <div class="p-md border-b border-white/10 flex items-center gap-md flex-shrink-0">
           <div class="relative">
             <div class="w-10 h-10 rounded-full overflow-hidden">
-              <img class="w-full h-full object-cover" [src]="conv.avatar" [alt]="conv.name" />
+              <img class="w-full h-full object-cover" [src]="conv.peer.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="conv.peer.displayName" />
             </div>
-            <span *ngIf="conv.online" class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-tertiary rounded-full border-2 border-surface"></span>
+            <span *ngIf="conv.peer.status === 'ONLINE'" class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-tertiary rounded-full border-2 border-surface"></span>
           </div>
           <div>
-            <p class="font-label text-label-md text-on-surface">{{ conv.name }}</p>
-            <p class="font-label text-label-sm text-tertiary">{{ conv.online ? 'Online now' : 'Offline' }}</p>
+            <p class="font-label text-label-md text-on-surface">{{ conv.peer.displayName }}</p>
+            <p class="font-label text-label-sm text-tertiary">{{ conv.peer.status === 'ONLINE' ? 'Online now' : 'Offline' }}</p>
           </div>
           <div class="ml-auto flex gap-sm">
             <button class="p-sm rounded-full hover:bg-white/5 transition-all">
@@ -81,7 +81,7 @@
             </div>
           </div>
           <!-- Typing indicator -->
-          <div class="flex justify-start" *ngIf="conv.online">
+          <div class="flex justify-start" *ngIf="conv.peer.status === 'ONLINE'">
             <div class="bg-surface-container border border-white/5 px-md py-sm rounded-2xl rounded-bl-sm flex gap-xs items-center">
               <span class="w-1.5 h-1.5 bg-on-surface-variant rounded-full pulse-animation"></span>
               <span class="w-1.5 h-1.5 bg-on-surface-variant rounded-full pulse-animation" style="animation-delay: 0.2s"></span>
@@ -97,9 +97,10 @@
           </button>
           <input
             [(ngModel)]="newMessage"
+            (keyup.enter)="sendMessage()"
             class="flex-1 bg-surface-container/40 border border-white/5 rounded-full py-sm px-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-secondary transition-all"
             placeholder="Type a message..." type="text" />
-          <button class="w-10 h-10 bg-primary rounded-full flex items-center justify-center neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+          <button (click)="sendMessage()" class="w-10 h-10 bg-primary rounded-full flex items-center justify-center neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
             <span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">send</span>
           </button>
         </div>

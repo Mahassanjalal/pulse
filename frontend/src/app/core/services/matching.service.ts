@@ -1,8 +1,12 @@
 import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { environment } from '@env/environment';
+import { SocketService } from './socket.service';
 
 export interface MatchData {
   userId: string;
+  matchId: string;
   name: string;
   location: string;
   age: number;
@@ -19,17 +23,72 @@ export interface MatchData {
 export class MatchingService {
   private status = 'idle';
   private timer = 0;
-  private matchQuality = 'excellent';
-  private matchFound$ = new Subject<MatchData | null>();
+  private currentMatchId: string | null = null;
+
+  private matchFound$ = new Subject<MatchData>();
   private statusChange$ = new Subject<string>();
   private timerUpdate$ = new Subject<number>();
-  private queuePosition = 0;
+  private matchSkipped$ = new Subject<void>();
+  private matchEnded$ = new Subject<any>();
+  private matchingQueue$ = new Subject<any>();
+  private timerInterval: any = null;
+
+  constructor(
+    private http: HttpClient,
+    private socketService: SocketService
+  ) {
+    this.socketService.on('match_found').subscribe((data: any) => {
+      this.status = 'matched';
+      this.statusChange$.next('matched');
+      this.currentMatchId = data.matchId;
+      this.matchFound$.next({
+        userId: data.peer.id,
+        matchId: data.matchId,
+        name: data.peer.displayName || 'Unknown',
+        location: data.peer.country || 'Unknown',
+        age: data.peer.age || 0,
+        interests: data.peer.interests || [],
+        isVerified: data.peer.isVerified || false,
+        isPremium: data.peer.isPremium || false,
+        avatar: data.peer.profilePicture || '',
+        gender: data.peer.gender || '',
+      });
+      this.startTimer();
+    });
+
+    this.socketService.on('matching_queue').subscribe((data: any) => {
+      this.status = 'matching';
+      this.statusChange$.next('matching');
+      this.matchingQueue$.next(data);
+    });
+
+    this.socketService.on('matching_cancelled').subscribe(() => {
+      this.status = 'idle';
+      this.statusChange$.next('idle');
+      this.stopTimer();
+    });
+
+    this.socketService.on('match_skipped').subscribe(() => {
+      this.status = 'idle';
+      this.statusChange$.next('idle');
+      this.stopTimer();
+      this.matchSkipped$.next();
+    });
+
+    this.socketService.on('match_ended').subscribe((data: any) => {
+      this.status = 'idle';
+      this.statusChange$.next('idle');
+      this.stopTimer();
+      this.currentMatchId = null;
+      this.matchEnded$.next(data);
+    });
+  }
 
   get status$(): Observable<string> {
     return this.statusChange$.asObservable();
   }
 
-  get matchFound$(): Observable<MatchData | null> {
+  get matchFoundObs$(): Observable<MatchData> {
     return this.matchFound$.asObservable();
   }
 
@@ -37,32 +96,32 @@ export class MatchingService {
     return this.timerUpdate$.asObservable();
   }
 
+  get matchSkippedObs$(): Observable<void> {
+    return this.matchSkipped$.asObservable();
+  }
+
+  get matchEndedObs$(): Observable<any> {
+    return this.matchEnded$.asObservable();
+  }
+
   get currentStatus(): string {
     return this.status;
   }
 
-  get currentTimer(): number {
-    return this.timer;
+  get currentMatch(): string | null {
+    return this.currentMatchId;
   }
 
   startMatching(filters?: any): void {
     this.status = 'matching';
     this.statusChange$.next('matching');
-    this.timer = 0;
-    this.simulateTimer();
-    setTimeout(() => {
-      this.status = 'matched';
-      this.statusChange$.next('matched');
-      this.matchFound$.next(this.getRandomMatch());
-      this.startTimer();
-    }, Math.random() * 5000 + 2000);
+    this.socketService.startMatching(filters);
   }
 
   skipMatch(): void {
-    this.status = 'idle';
-    this.statusChange$.next('idle');
-    this.timer = 0;
-    this.timerUpdate$.next(0);
+    if (this.currentMatchId) {
+      this.socketService.skipMatch(this.currentMatchId);
+    }
   }
 
   reconnect(): void {
@@ -70,6 +129,7 @@ export class MatchingService {
   }
 
   pauseMatching(): void {
+    this.socketService.cancelMatching();
     this.status = 'paused';
     this.statusChange$.next('paused');
   }
@@ -81,52 +141,30 @@ export class MatchingService {
   }
 
   endMatch(): void {
-    this.status = 'ended';
-    this.statusChange$.next('ended');
-    this.stopTimer();
-  }
-
-  private getRandomMatch(): MatchData {
-    const names = ['Sarah', 'Alex', 'Emma', 'Lucas', 'Mia', 'Noah', 'Lily', 'Kai', 'Chloe', 'Leo'];
-    const locations = ['London, UK', 'Tokyo, JP', 'Paris, FR', 'New York, US', 'Sydney, AU', 'Berlin, DE', 'Toronto, CA', 'Seoul, KR'];
-    const interests = [
-      ['Gaming', 'Tech'], ['Music', 'Art'], ['Travel', 'Photography'],
-      ['Sports', 'Fitness'], ['Coding', 'Anime'], ['Food', 'Culture']
-    ];
-    const idx = Math.floor(Math.random() * names.length);
-    return {
-      userId: String(Math.random()),
-      name: names[idx] + ' ' + String.fromCharCode(65 + Math.floor(Math.random() * 26)) + '.',
-      location: locations[Math.floor(Math.random() * locations.length)],
-      age: Math.floor(Math.random() * 15) + 18,
-      interests: interests[idx] || [],
-      isVerified: Math.random() > 0.5,
-      isPremium: Math.random() > 0.7,
-      avatar: 'https://example.com/avatar.jpg',
-      gender: ['female', 'male'][Math.floor(Math.random() * 2)]
-    };
-  }
-
-  private simulateTimer(): void {
-    const interval = setInterval(() => {
-      if (this.timer > 59) clearInterval(interval);
-    }, 1000);
+    if (this.currentMatchId) {
+      this.socketService.endMatch(this.currentMatchId);
+    }
   }
 
   private startTimer(): void {
-    const interval = setInterval(() => {
+    this.stopTimer();
+    this.timer = 0;
+    this.timerInterval = setInterval(() => {
       this.timer++;
       this.timerUpdate$.next(this.timer);
-      if (this.timer > 3600) clearInterval(interval);
     }, 1000);
   }
 
   private stopTimer(): void {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
     this.timer = 0;
     this.timerUpdate$.next(0);
   }
 
-  private getMatchQuality(): string {
-    return this.matchQuality;
+  getMatchHistory(): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/matches/history`);
   }
 }

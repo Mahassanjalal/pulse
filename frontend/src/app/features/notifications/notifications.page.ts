@@ -1,10 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { FormsModule } from '@angular/forms';
+import { NotificationService, NotificationItem } from '../../core/services/notification.service';
 
-interface NotificationItem {
+interface DisplayNotification {
   id: string;
   icon: string;
   iconBg: string;
@@ -28,7 +29,7 @@ interface NotificationItem {
       </div>
 
       <div class="space-y-md">
-        <div *ngFor="let notif of notifications" class="glass-panel rounded-2xl p-lg border border-white/10 flex items-start gap-md cursor-pointer hover:bg-white/5 transition-all" [class.border-l-4]="notif.unread" [style.border-left-color]="notif.unread ? 'var(--color-primary)' : 'transparent'">
+        <div *ngFor="let notif of notifications" class="glass-panel rounded-2xl p-lg border border-white/10 flex items-start gap-md cursor-pointer hover:bg-white/5 transition-all" [class.border-l-4]="notif.unread" [style.border-left-color]="notif.unread ? 'var(--color-primary)' : 'transparent'" (click)="markRead(notif)">
           <div class="w-12 h-12 rounded-full flex items-center justify-center shrink-0" [class]="notif.iconBg">
             <span class="material-symbols-outlined" [class]="notif.iconColor">{{ notif.icon }}</span>
           </div>
@@ -51,41 +52,58 @@ interface NotificationItem {
   `,
   styles: []
 })
-export class NotificationsPageComponent {
-  notifications: NotificationItem[] = [
-    {
-      id: '1', icon: 'person_add', iconBg: 'bg-primary/20', iconColor: 'text-primary',
-      title: 'New Friend Request', message: 'Alex Rivera wants to connect with you.',
-      time: '2m ago', unread: true
-    },
-    {
-      id: '2', icon: 'favorite', iconBg: 'bg-error/20', iconColor: 'text-error',
-      title: 'Profile Like', message: 'Sarah M. liked your profile.',
-      time: '15m ago', unread: true
-    },
-    {
-      id: '3', icon: 'chat', iconBg: 'bg-secondary-fixed/20', iconColor: 'text-secondary-fixed',
-      title: 'New Message', message: 'Kai Sterling sent you a message.',
-      time: '1h ago', unread: true
-    },
-    {
-      id: '4', icon: 'stars', iconBg: 'bg-tertiary/20', iconColor: 'text-tertiary',
-      title: 'Daily Reward', message: 'Claim your daily gems streak reward!',
-      time: '3h ago', unread: false
-    },
-    {
-      id: '5', icon: 'group', iconBg: 'bg-primary/20', iconColor: 'text-primary',
-      title: 'Friend Accepted', message: 'Mira Zhang accepted your friend request.',
-      time: '5h ago', unread: false
-    },
-    {
-      id: '6', icon: 'workspace_premium', iconBg: 'bg-yellow-400/20', iconColor: 'text-yellow-400',
-      title: 'Premium Offer', message: 'Get 50% off your first month of Pulse Premium!',
-      time: '1d ago', unread: false
-    }
-  ];
+export class NotificationsPageComponent implements OnInit {
+  notifications: DisplayNotification[] = [];
+
+  private iconMap: Record<string, { icon: string; iconBg: string; iconColor: string }> = {
+    FRIEND_REQUEST: { icon: 'person_add', iconBg: 'bg-primary/20', iconColor: 'text-primary' },
+    FRIEND_ACCEPTED: { icon: 'group', iconBg: 'bg-primary/20', iconColor: 'text-primary' },
+    NEW_MESSAGE: { icon: 'chat', iconBg: 'bg-secondary-fixed/20', iconColor: 'text-secondary-fixed' },
+    MATCH_ENDED: { icon: 'videocam', iconBg: 'bg-tertiary/20', iconColor: 'text-tertiary' },
+    PROFILE_VIEW: { icon: 'visibility', iconBg: 'bg-tertiary/20', iconColor: 'text-tertiary' },
+    DAILY_REWARD: { icon: 'stars', iconBg: 'bg-tertiary/20', iconColor: 'text-tertiary' },
+    PREMIUM_OFFER: { icon: 'workspace_premium', iconBg: 'bg-yellow-400/20', iconColor: 'text-yellow-400' },
+    WARNING: { icon: 'warning', iconBg: 'bg-error/20', iconColor: 'text-error' },
+  };
+
+  constructor(private notificationService: NotificationService) {}
+
+  ngOnInit(): void {
+    this.notificationService.loadNotifications();
+    this.notificationService.notifications$.subscribe(items => {
+      this.notifications = items.map(n => ({
+        id: n.id,
+        icon: this.iconMap[n.type]?.icon || 'notifications',
+        iconBg: this.iconMap[n.type]?.iconBg || 'bg-primary/20',
+        iconColor: this.iconMap[n.type]?.iconColor || 'text-primary',
+        title: n.title,
+        message: n.message,
+        time: this.formatTime(n.timestamp),
+        unread: n.unread,
+      }));
+    });
+  }
 
   markAllRead(): void {
-    this.notifications.forEach(n => n.unread = false);
+    this.notificationService.markAllAsRead();
+  }
+
+  markRead(notif: DisplayNotification): void {
+    if (notif.unread) {
+      this.notificationService.markAsRead(notif.id);
+    }
+  }
+
+  private formatTime(date: Date): string {
+    const now = new Date();
+    const d = new Date(date);
+    const diff = now.getTime() - d.getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   }
 }

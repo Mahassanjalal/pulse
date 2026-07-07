@@ -1,0 +1,156 @@
+import { FastifyInstance } from 'fastify';
+import { prisma } from '../lib/prisma';
+import { SendMessageSchema } from '../lib/validators';
+import { authenticate, getAuthUser } from '../middleware/auth';
+import { NotificationService, isBlocked } from '../lib/notifications';
+
+export default async function chatRoutes(app: FastifyInstance) {
+  app.get('/conversations', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const userId = authUser.id;
+    
+    const matches = await prisma.match.findMany({
+      where: {
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+        status: 'ENDED',
+      },
+      include: {
+        user1: { select: { id: true, displayName: true, profilePicture: true, status: true } },
+        user2: { select: { id: true, displayName: true, profilePicture: true, status: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    const conversations = matches.map((match) => {
+      const peer = match.user1Id === userId ? match.user2 : match.user1;
+      const lastMessage = match.messages[0];
+      const unreadCount = match.messages.filter(
+        (m) => !m.read && m.senderId !== userId
+      ).length;
+      
+      return {
+        id: match.id,
+        peer: {
+          id: peer.id,
+          displayName: peer.displayName,
+          profilePicture: peer.profilePicture,
+          status: peer.status,
+        },
+        lastMessage: lastMessage ? {
+          content: lastMessage.content,
+          createdAt: lastMessage.createdAt,
+        } : null,
+        unreadCount,
+        createdAt: match.createdAt,
+      };
+    });
+    
+    return { conversations };
+  });
+
+  app.get('/messages/:matchId', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const userId = authUser.id;
+    const { matchId } = req.params as { matchId: string };
+    const { cursor, limit = '50' } = req.query as { cursor?: string; limit?: string };
+    
+    const match = await prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+      },
+    });
+    
+    if (!match) {
+      return { error: 'Conversation not found' };
+    }
+    
+    const where: Record<string, any> = { matchId };
+    if (cursor) {
+      where.id = { lt: cursor };
+    }
+    
+    const messages = await prisma.message.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Number(limit) + 1,
+    });
+    
+    const hasMore = messages.length > Number(limit);
+    const paginated = hasMore ? messages.slice(0, Number(limit)) : messages;
+    const lastMessage = paginated[paginated.length - 1];
+    const nextCursor = hasMore && lastMessage ? lastMessage.id : undefined;
+    
+    const incomingIds = paginated
+      .filter((m) => m.senderId !== userId && !m.read)
+      .map((m) => m.id);
+    
+    if (incomingIds.length > 0) {
+      await prisma.message.updateMany({
+        where: { id: { in: incomingIds } },
+        data: { read: true, readAt: new Date() },
+      });
+    }
+    
+    return {
+      messages: paginated.reverse(),
+      nextCursor,
+    };
+  });
+
+  app.post('/messages', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const userId = authUser.id;
+    const data = SendMessageSchema.parse(req.body);
+    
+    const match = await prisma.match.findFirst({
+      where: {
+        id: data.matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+      },
+    });
+    
+    if (!match) {
+      return { error: 'Conversation not found' };
+    }
+    
+    const receiverId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    if (await isBlocked(userId, receiverId)) {
+      return { error: 'Cannot send message to this user' };
+    }
+    
+    const message = await prisma.message.create({
+      data: {
+        matchId: data.matchId,
+        senderId: userId,
+        receiverId,
+        content: data.content,
+        type: data.type,
+      },
+    });
+
+    const sender = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    });
+    await NotificationService.newMessage(receiverId, sender?.displayName || 'Someone');
+
+    return { message };
+  });
+
+  app.post('/messages/:id/read', { preHandler: authenticate }, async (req) => {
+    const { id } = req.params as { id: string };
+    
+    await prisma.message.update({
+      where: { id },
+      data: { read: true, readAt: new Date() },
+    });
+    
+    return { success: true };
+  });
+}

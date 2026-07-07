@@ -6,98 +6,51 @@
       <div class="p-lg border-b border-white/10">
         <div class="relative">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-          <input class="w-full bg-surface/40 border border-white/5 rounded-full py-sm pl-xl pr-md text-body-md text-on-surface focus:outline-none focus:border-secondary transition-all"
+          <input [(ngModel)]="searchQuery" class="w-full bg-surface/40 border border-white/5 rounded-full py-sm pl-xl pr-md text-body-md text-on-surface focus:outline-none focus:border-secondary transition-all"
             placeholder="Search friends..." type="text" />
         </div>
       </div>
       <div class="p-lg">
         <!-- Online Friends -->
-        <h3 class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-md">Online Now (3)</h3>
+        <h3 class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-md">Online Now ({{ onlineFriends.length }})</h3>
         <div class="space-y-sm mb-xl">
-          <div class="flex items-center gap-md p-md hover:bg-white/5 rounded-xl transition-all cursor-pointer group">
+          <div *ngFor="let friend of onlineFriends" class="flex items-center gap-md p-md hover:bg-white/5 rounded-xl transition-all cursor-pointer group" [routerLink]="['/profile', friend.peer.id]">
             <div class="relative">
               <div class="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                <img class="w-full h-full object-cover" src="https://i.pravatar.cc/100?img=10" alt="Kai Sterling" />
+                <img class="w-full h-full object-cover" [src]="friend.peer.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="friend.peer.displayName" />
               </div>
               <span class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface pulse-animation"></span>
             </div>
             <div class="flex-1 min-w-0">
-              <p class="font-label text-label-md text-on-surface truncate group-hover:text-primary transition-colors">Kai Sterling</p>
+              <p class="font-label text-label-md text-on-surface truncate group-hover:text-primary transition-colors">{{ friend.peer.displayName }}</p>
               <p class="font-label text-label-sm text-on-surface-variant">Online now</p>
             </div>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">chat</button>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors">videocam</button>
+            <button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" [routerLink]="['/messages']">chat</button>
+            <button class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors" [routerLink]="['/video']">videocam</button>
           </div>
-
-          <div class="flex items-center gap-md p-md hover:bg-white/5 rounded-xl transition-all cursor-pointer group">
-            <div class="relative">
-              <div class="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                <img class="w-full h-full object-cover" src="https://i.pravatar.cc/100?img=12" alt="Mira Zhang" />
-              </div>
-              <span class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface pulse-animation"></span>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-label text-label-md text-on-surface truncate group-hover:text-primary transition-colors">Mira Zhang</p>
-              <p class="font-label text-label-sm text-on-surface-variant">Online now</p>
-            </div>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">chat</button>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors">videocam</button>
-          </div>
-
-          <div class="flex items-center gap-md p-md hover:bg-white/5 rounded-xl transition-all cursor-pointer group">
-            <div class="relative">
-              <div class="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                <img class="w-full h-full object-cover" src="https://i.pravatar.cc/100?img=15" alt="Damon Cole" />
-              </div>
-              <span class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface pulse-animation"></span>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-label text-label-md text-on-surface truncate group-hover:text-primary transition-colors">Damon Cole</p>
-              <p class="font-label text-label-sm text-on-surface-variant">Online now</p>
-            </div>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">chat</button>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors">videocam</button>
+          <div *ngIf="onlineFriends.length === 0" class="text-center py-md text-on-surface-variant text-sm">
+            No friends online right now
           </div>
         </div>
 
         <!-- All Friends -->
-        <h3 class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-md">All Friends (12)</h3>
+        <h3 class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-md">All Friends ({{ filteredFriends.length }})</h3>
         <div class="space-y-sm">
-          <div class="flex items-center justify-between p-md hover:bg-white/5 rounded-xl transition-all">
-            <div class="flex items-center gap-md">
+          <div *ngFor="let friend of filteredFriends" class="flex items-center justify-between p-md hover:bg-white/5 rounded-xl transition-all">
+            <div class="flex items-center gap-md" [routerLink]="['/profile', friend.peer.id]">
               <div class="w-10 h-10 rounded-full overflow-hidden border border-white/10">
-                <img class="w-full h-full object-cover" src="https://i.pravatar.cc/100?img=5" alt="" />
+                <img class="w-full h-full object-cover" [src]="friend.peer.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="friend.peer.displayName" />
               </div>
               <div>
-                <p class="font-label text-label-md text-on-surface">Sarah M.</p>
-                <p class="font-label text-label-sm text-on-surface-variant">Last seen 5m ago</p>
+                <p class="font-label text-label-md text-on-surface">{{ friend.peer.displayName }}</p>
+                <p class="font-label text-label-sm text-on-surface-variant">{{ friend.peer.status === 'ONLINE' ? 'Online now' : 'Offline' }}</p>
               </div>
             </div>
             <div class="flex items-center gap-xs">
-              <button class="p-sm hover:bg-white/5 rounded-full transition-all">
-                <span class="material-symbols-outlined text-body-md text-on-surface-variant hover:text-primary">favorite</span>
+              <button (click)="toggleFavorite(friend.friendId)" class="p-sm hover:bg-white/5 rounded-full transition-all">
+                <span class="material-symbols-outlined text-body-md" [class]="friend.isFavorite ? 'text-primary' : 'text-on-surface-variant hover:text-primary'">favorite</span>
               </button>
-              <button class="p-sm hover:bg-white/5 rounded-full transition-all">
-                <span class="material-symbols-outlined text-body-md text-on-surface-variant hover:text-error">close</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-between p-md hover:bg-white/5 rounded-xl transition-all">
-            <div class="flex items-center gap-md">
-              <div class="w-10 h-10 rounded-full overflow-hidden border border-white/10">
-                <img class="w-full h-full object-cover" src="https://i.pravatar.cc/100?img=20" alt="" />
-              </div>
-              <div>
-                <p class="font-label text-label-md text-on-surface">Jake T.</p>
-                <p class="font-label text-label-sm text-on-surface-variant">Last seen 2h ago</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-xs">
-              <button class="p-sm hover:bg-white/5 rounded-full transition-all">
-                <span class="material-symbols-outlined text-body-md text-on-surface-variant hover:text-primary">favorite</span>
-              </button>
-              <button class="p-sm hover:bg-white/5 rounded-full transition-all">
+              <button (click)="removeFriend(friend.friendId)" class="p-sm hover:bg-white/5 rounded-full transition-all">
                 <span class="material-symbols-outlined text-body-md text-on-surface-variant hover:text-error">close</span>
               </button>
             </div>
@@ -111,40 +64,25 @@
       <div class="glass-panel p-lg rounded-2xl border border-white/10">
         <h3 class="font-headline text-headline-md text-on-surface mb-md">Friend Requests</h3>
         <div class="space-y-md">
-          <div class="flex items-center gap-md p-md bg-white/5 rounded-xl border border-white/5">
+          <div *ngFor="let req of receivedRequests" class="flex items-center gap-md p-md bg-white/5 rounded-xl border border-white/5">
             <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-              <img class="w-full h-full object-cover" src="https://i.pravatar.cc/100?img=25" alt="" />
+              <img class="w-full h-full object-cover" [src]="req.fromUser?.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="req.fromUser?.displayName" />
             </div>
             <div class="flex-1 min-w-0">
-              <p class="font-label text-label-md text-on-surface truncate">Alex Rivera</p>
-              <p class="font-label text-label-sm text-on-surface-variant">3 mutual friends</p>
+              <p class="font-label text-label-md text-on-surface truncate">{{ req.fromUser?.displayName }}</p>
+              <p class="font-label text-label-sm text-on-surface-variant">{{ req.fromUser?.country || 'New friend' }}</p>
             </div>
             <div class="flex gap-xs">
-              <button class="w-8 h-8 bg-tertiary rounded-full flex items-center justify-center text-white hover:brightness-110 transition-all">
+              <button (click)="acceptRequest(req.id)" class="w-8 h-8 bg-tertiary rounded-full flex items-center justify-center text-white hover:brightness-110 transition-all">
                 <span class="material-symbols-outlined text-sm">check</span>
               </button>
-              <button class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
+              <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
                 <span class="material-symbols-outlined text-sm">close</span>
               </button>
             </div>
           </div>
-
-          <div class="flex items-center gap-md p-md bg-white/5 rounded-xl border border-white/5">
-            <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-              <img class="w-full h-full object-cover" src="https://i.pravatar.cc/100?img=30" alt="" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-label text-label-md text-on-surface truncate">Yuki Tanaka</p>
-              <p class="font-label text-label-sm text-on-surface-variant">From Japan 🇯🇵</p>
-            </div>
-            <div class="flex gap-xs">
-              <button class="w-8 h-8 bg-tertiary rounded-full flex items-center justify-center text-white hover:brightness-110 transition-all">
-                <span class="material-symbols-outlined text-sm">check</span>
-              </button>
-              <button class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
-                <span class="material-symbols-outlined text-sm">close</span>
-              </button>
-            </div>
+          <div *ngIf="receivedRequests.length === 0" class="text-center py-md text-on-surface-variant text-sm">
+            No pending requests
           </div>
         </div>
       </div>

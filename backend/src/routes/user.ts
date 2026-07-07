@@ -1,0 +1,266 @@
+import { FastifyInstance } from 'fastify';
+import { prisma } from '../lib/prisma';
+import { UpdateProfileSchema, UpdatePreferencesSchema, UpdatePrivacySettingsSchema } from '../lib/validators';
+import { authenticate, getAuthUser } from '../middleware/auth';
+
+export default async function userRoutes(app: FastifyInstance) {
+  app.get('/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        age: true,
+        gender: true,
+        bio: true,
+        country: true,
+        languages: true,
+        interests: true,
+        profilePicture: true,
+        coverImage: true,
+        isVerified: true,
+        isPremium: true,
+        status: true,
+        trustScore: true,
+        verificationLevel: true,
+        communityRating: true,
+        friendsCount: true,
+        totalConversations: true,
+        createdAt: true,
+        privacySettings: true,
+      },
+    });
+    
+    if (!user) {
+      reply.status(404);
+      return { error: 'User not found' };
+    }
+
+    if (user.privacySettings?.privateProfile) {
+      return {
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          isVerified: user.isVerified,
+          isPremium: user.isPremium,
+          privacySettings: user.privacySettings,
+          isPrivate: true,
+        },
+      };
+    }
+
+    const privacy = user.privacySettings;
+    const filtered: Record<string, any> = { ...user };
+    if (privacy?.hideAge) filtered.age = undefined;
+    if (privacy?.hideCountry) filtered.country = undefined;
+    if (privacy?.hideOnlineStatus) filtered.status = undefined;
+    if (privacy?.hideProfilePicture) filtered.profilePicture = undefined;
+    delete filtered.privacySettings;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        const decoded = app.jwt.verify<{ userId: string }>(authHeader.replace('Bearer ', ''));
+        if (decoded.userId !== id) {
+          await prisma.profileView.upsert({
+            where: { viewerId_viewedUserId: { viewerId: decoded.userId, viewedUserId: id } },
+            update: { createdAt: new Date() },
+            create: { viewerId: decoded.userId, viewedUserId: id },
+          });
+        }
+      } catch {}
+    }
+
+    return { user: filtered, privacySettings: user.privacySettings };
+  });
+
+  app.patch('/me/profile', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const data = UpdateProfileSchema.parse(req.body);
+    
+    const user = await prisma.user.update({
+      where: { id: authUser.id },
+      data,
+      select: {
+        id: true,
+        displayName: true,
+        bio: true,
+        age: true,
+        gender: true,
+        country: true,
+        languages: true,
+        interests: true,
+        profilePicture: true,
+        coverImage: true,
+      },
+    });
+    
+    return { user };
+  });
+
+  app.put('/me/settings', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const data = UpdatePrivacySettingsSchema.parse(req.body);
+    
+    const settings = await prisma.privacySettings.upsert({
+      where: { userId: authUser.id },
+      create: { ...data, userId: authUser.id },
+      update: data,
+    });
+    
+    return { settings };
+  });
+
+  app.put('/me/preferences', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const data = UpdatePreferencesSchema.parse(req.body);
+    
+    const preferences = await prisma.userPreferences.upsert({
+      where: { userId: authUser.id },
+      create: { ...data, userId: authUser.id },
+      update: data,
+    });
+    
+    return { preferences };
+  });
+
+  app.get('/me/settings', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    
+    const [settings, preferences] = await Promise.all([
+      prisma.privacySettings.findUnique({ where: { userId: authUser.id } }),
+      prisma.userPreferences.findUnique({ where: { userId: authUser.id } }),
+    ]);
+    
+    return { settings, preferences };
+  });
+
+  app.get('/search', async (req) => {
+    const { q } = req.query as { q: string };
+    
+    if (!q || q.length < 2) {
+      return { users: [] };
+    }
+    
+    const users = await prisma.user.findMany({
+      where: {
+        isGuest: false,
+        OR: [
+          { username: { contains: q } },
+          { displayName: { contains: q } },
+        ],
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        profilePicture: true,
+        country: true,
+        interests: true,
+        isVerified: true,
+        isPremium: true,
+        status: true,
+      },
+      take: 20,
+    });
+    
+    return { users };
+  });
+
+  app.get('/discover', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    
+    const users = await prisma.user.findMany({
+      where: {
+        id: { not: authUser.id },
+        isGuest: false,
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        profilePicture: true,
+        country: true,
+        interests: true,
+        languages: true,
+        age: true,
+        isVerified: true,
+        isPremium: true,
+        status: true,
+        trustScore: true,
+      },
+      orderBy: { trustScore: 'desc' },
+      take: 24,
+    });
+    
+    return { users };
+  });
+
+  app.get('/me/dashboard', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    
+    const [user, onlineCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: authUser.id },
+        select: {
+          coins: true,
+          dailyStreak: true,
+          friendsCount: true,
+          totalConversations: true,
+          trustScore: true,
+          isPremium: true,
+          achievements: true,
+          displayName: true,
+          profilePicture: true,
+        },
+      }),
+      prisma.user.count({ where: { status: 'ONLINE' } }),
+    ]);
+    
+    return { stats: user, onlineCount };
+  });
+
+  app.get('/:id/mutual-friends', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const userId = authUser.id;
+    const { id: otherUserId } = req.params as { id: string };
+    
+    const userFriends = await prisma.friend.findMany({
+      where: {
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+    });
+    
+    const userFriendIds = userFriends.map((f) => 
+      f.senderId === userId ? f.receiverId : f.senderId
+    );
+    
+    const otherFriends = await prisma.friend.findMany({
+      where: {
+        OR: [{ senderId: otherUserId }, { receiverId: otherUserId }],
+      },
+    });
+    
+    const otherFriendIds = otherFriends.map((f) =>
+      f.senderId === otherUserId ? f.receiverId : f.senderId
+    );
+    
+    const mutualIds = userFriendIds.filter((id) => otherFriendIds.includes(id));
+    
+    const mutualFriends = await prisma.user.findMany({
+      where: { id: { in: mutualIds } },
+      select: {
+        id: true,
+        displayName: true,
+        profilePicture: true,
+      },
+      take: 20,
+    });
+    
+    return { mutualFriends, count: mutualIds.length };
+  });
+}

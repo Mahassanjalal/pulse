@@ -1,29 +1,87 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { ChatService, Conversation, ChatMessage } from '../../core/services/chat.service';
+import { SocketService } from '../../core/services/socket.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'pulse-messages',
   templateUrl: './messages.page.html',
   styles: []
 })
-export class MessagesPageComponent {
-  activeChat: string | null = 'kai-sterling';
+export class MessagesPageComponent implements OnInit, OnDestroy {
+  activeChat: string | null = null;
   newMessage = '';
+  conversations: Conversation[] = [];
+  messages: any[] = [];
+  private subscriptions: Subscription[] = [];
 
-  conversations = [
-    { id: 'kai-sterling', name: 'Kai Sterling', avatar: 'https://i.pravatar.cc/100?img=10', lastMsg: 'Hey! Are you free for a chat?', time: '2m', unread: 2, online: true },
-    { id: 'mira-zhang', name: 'Mira Zhang', avatar: 'https://i.pravatar.cc/100?img=12', lastMsg: 'That was a great conversation!', time: '1h', unread: 0, online: true },
-    { id: 'alex-river', name: 'Alex Rivera', avatar: 'https://i.pravatar.cc/100?img=15', lastMsg: 'See you around 👋', time: '3h', unread: 0, online: false }
-  ];
+  constructor(
+    private chatService: ChatService,
+    private socketService: SocketService
+  ) {}
 
-  messages = [
-    { id: 1, sender: 'kai-sterling', text: 'Hey! How are you doing today?', time: '10:02 AM', self: false },
-    { id: 2, sender: 'me', text: 'I\'m great! Just finished a video chat session', time: '10:03 AM', self: true },
-    { id: 3, sender: 'kai-sterling', text: 'Nice! I was matched with someone from Japan earlier, it was amazing 🇯🇵', time: '10:04 AM', self: false },
-    { id: 4, sender: 'me', text: 'Oh wow! The translation feature really is a game changer', time: '10:05 AM', self: true },
-    { id: 5, sender: 'kai-sterling', text: 'Absolutely! Are you free for a chat now?', time: '10:06 AM', self: false }
-  ];
+  ngOnInit(): void {
+    this.chatService.loadConversations();
+    this.subscriptions.push(
+      this.chatService.conversationsObs.subscribe(convs => this.conversations = convs)
+    );
 
-  getActiveConversation() {
+    this.subscriptions.push(
+      this.chatService.newMessages$.subscribe(msg => {
+        if (msg.matchId === this.activeChat) {
+          const userId = localStorage.getItem('userId');
+          this.messages.push({
+            id: msg.id,
+            text: msg.content,
+            self: msg.senderId === userId,
+            time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        }
+      })
+    );
+
+    this.subscriptions.push(
+      this.socketService.on('match_message').subscribe((msg: any) => {
+        if (msg.matchId === this.activeChat) {
+          this.messages.push({
+            id: msg.id,
+            text: msg.content,
+            self: false,
+            time: new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        }
+      })
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(s => s.unsubscribe());
+  }
+
+  selectConversation(convId: string): void {
+    this.activeChat = convId;
+    this.messages = [];
+    this.chatService.getMessages(convId).subscribe({
+      next: (res) => {
+        const userId = localStorage.getItem('userId');
+        this.messages = res.messages.map(m => ({
+          id: m.id,
+          text: m.content,
+          self: m.senderId === userId,
+          time: new Date(m.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }));
+      }
+    });
+  }
+
+  sendMessage(): void {
+    if (!this.newMessage.trim() || !this.activeChat) return;
+    const content = this.newMessage.trim();
+    this.newMessage = '';
+    this.chatService.sendMessage(this.activeChat, content);
+  }
+
+  getActiveConversation(): Conversation | undefined {
     return this.conversations.find(c => c.id === this.activeChat);
   }
 }

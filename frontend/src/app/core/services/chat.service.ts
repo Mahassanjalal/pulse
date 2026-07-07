@@ -1,30 +1,56 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { BehaviorSubject, Observable, Subject, tap } from 'rxjs';
+import { environment } from '@env/environment';
 
 export interface ChatMessage {
   id: string;
   senderId: string;
   receiverId: string;
+  matchId: string;
   content: string;
-  type: 'text' | 'image' | 'emoji' | 'gif' | 'sticker' | 'voice' | 'video';
+  type: 'text' | 'image' | 'voice' | 'video' | 'emoji' | 'gif' | 'sticker';
   timestamp: Date;
+  createdAt?: string;
   read: boolean;
+  deleted: boolean;
+}
+
+export interface Conversation {
+  id: string;
+  peer: {
+    id: string;
+    displayName: string;
+    profilePicture: string;
+    status: string;
+  };
+  lastMessage: {
+    content: string;
+    createdAt: string;
+  } | null;
+  unreadCount: number;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class ChatService {
-  private messages: Map<string, ChatMessage[]> = new Map();
-  private typing$ = new Subject<string>();
+  private conversations$ = new BehaviorSubject<Conversation[]>([]);
   private newMessage$ = new Subject<ChatMessage>();
+  private typing$ = new Subject<{ matchId: string; isTyping: boolean }>();
   private messageRead$ = new Subject<{ messageId: string; chatId: string }>();
+
+  constructor(private http: HttpClient) {}
+
+  get conversationsObs(): Observable<Conversation[]> {
+    return this.conversations$.asObservable();
+  }
 
   get newMessages$(): Observable<ChatMessage> {
     return this.newMessage$.asObservable();
   }
 
-  get typing$(): Observable<string> {
+  get typingObs$(): Observable<{ matchId: string; isTyping: boolean }> {
     return this.typing$.asObservable();
   }
 
@@ -32,35 +58,32 @@ export class ChatService {
     return this.messageRead$.asObservable();
   }
 
-  sendMessage(chatId: string, message: ChatMessage): void {
-    if (!this.messages.has(chatId)) {
-      this.messages.set(chatId, []);
-    }
-    this.messages.get(chatId)!.push(message);
-    this.newMessage$.next(message);
+  loadConversations(): void {
+    this.http.get<{ conversations: Conversation[] }>(`${environment.apiUrl}/chat/conversations`).subscribe({
+      next: (res) => this.conversations$.next(res.conversations),
+      error: () => this.conversations$.next([])
+    });
   }
 
-  getMessages(chatId: string): ChatMessage[] {
-    return this.messages.get(chatId) || [];
+  getMessages(matchId: string, cursor?: string): Observable<{ messages: ChatMessage[]; nextCursor?: string }> {
+    let url = `${environment.apiUrl}/chat/messages/${matchId}?limit=50`;
+    if (cursor) url += `&cursor=${cursor}`;
+    return this.http.get<{ messages: ChatMessage[]; nextCursor?: string }>(url);
   }
 
-  markAsRead(chatId: string, messageId: string): void {
-    this.messageRead$.next({ messageId, chatId });
+  sendMessage(matchId: string, content: string, type = 'TEXT'): void {
+    this.http.post<{ message: ChatMessage }>(`${environment.apiUrl}/chat/messages`, { matchId, content, type }).subscribe({
+      next: (res) => this.newMessage$.next(res.message),
+      error: (err) => console.error('Failed to send message:', err)
+    });
   }
 
-  sendTypingStatus(userId: string): void {
-    this.typing$.next(userId);
+  markAsRead(messageId: string): void {
+    this.http.post(`${environment.apiUrl}/chat/messages/${messageId}/read`, {}).subscribe();
   }
 
   getUnreadCount(userId: string): number {
-    let count = 0;
-    this.messages.forEach((msgs) => {
-      count += msgs.filter(m => m.receiverId === userId && !m.read).length;
-    });
-    return count;
-  }
-
-  clearChat(chatId: string): void {
-    this.messages.delete(chatId);
+    const conversations = this.conversations$.value;
+    return conversations.reduce((acc, c) => acc + c.unreadCount, 0);
   }
 }
