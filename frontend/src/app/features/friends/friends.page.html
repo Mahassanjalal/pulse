@@ -73,12 +73,22 @@
               <p class="font-label text-label-sm text-on-surface-variant">{{ req.fromUser?.country || 'New friend' }}</p>
             </div>
             <div class="flex gap-xs">
-              <button (click)="acceptRequest(req.id)" class="w-8 h-8 bg-tertiary rounded-full flex items-center justify-center text-white hover:brightness-110 transition-all">
-                <span class="material-symbols-outlined text-sm">check</span>
-              </button>
-              <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
-                <span class="material-symbols-outlined text-sm">close</span>
-              </button>
+              <ng-container *ngIf="authService.isAuthenticated() && authService.getCurrentUser()?.isPremium; else premiumRequired">
+                <button (click)="acceptRequest(req.id)" class="w-8 h-8 bg-tertiary rounded-full flex items-center justify-center text-white hover:brightness-110 transition-all">
+                  <span class="material-symbols-outlined text-sm">check</span>
+                </button>
+                <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
+                  <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+              </ng-container>
+              <ng-template #premiumRequired>
+                <button [routerLink]="['/premium']" class="px-sm py-xs bg-primary/20 text-primary rounded-full font-label text-label-xs hover:brightness-110 transition-all">
+                  Premium
+                </button>
+                <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
+                  <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+              </ng-template>
             </div>
           </div>
           <div *ngIf="receivedRequests.length === 0" class="text-center py-md text-on-surface-variant text-sm">

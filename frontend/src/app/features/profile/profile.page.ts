@@ -1,8 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
+import { FriendService } from '../../core/services/friend.service';
 import { environment } from '@env/environment';
+import { tap } from 'rxjs/operators';
 
 interface UserProfile {
   id: string;
@@ -39,16 +41,32 @@ export class ProfilePageComponent implements OnInit {
   isOwnProfile = false;
   mutualFriends: any[] = [];
   mutualFriendsCount = 0;
+  profileVisitors: any[] = [];
   interests: string[] = [];
+  relationship: string = 'NONE';
+  friendId: string | null = null;
+  isLoading = true;
+
+  showReportDialog = false;
+  reportCategory = 'OTHER';
+  reportDescription = '';
+  reportSubmitted = false;
+
+  editingField: string | null = null;
+  editValue: string = '';
+  newInterest: string = '';
 
   constructor(
     private route: ActivatedRoute,
     private http: HttpClient,
-    private authService: AuthService
+    private authService: AuthService,
+    private friendService: FriendService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
     this.route.params.subscribe(params => {
+      this.isLoading = true;
       const userId = params['id'];
       if (userId) {
         this.loadUser(userId);
@@ -66,20 +84,29 @@ export class ProfilePageComponent implements OnInit {
         next: (res) => {
           this.user = res.user;
           this.parseInterests();
-        }
+          this.isLoading = false;
+          this.loadProfileVisitors();
+        },
+        error: () => this.isLoading = false
       });
+    } else {
+      this.isLoading = false;
     }
   }
 
   private loadUser(userId: string): void {
     const currentUser = this.authService.getCurrentUser();
-    this.isOwnProfile = currentUser?.id === userId;
+    if (!currentUser) return;
+    this.isOwnProfile = currentUser.id === userId;
 
     this.http.get<{ user: UserProfile }>(`${environment.apiUrl}/users/${userId}`).subscribe({
       next: (res) => {
         this.user = res.user;
         this.parseInterests();
-      }
+        this.isLoading = false;
+        this.loadRelationshipStatus(userId);
+      },
+      error: () => this.isLoading = false
     });
 
     if (!this.isOwnProfile && currentUser) {
@@ -90,6 +117,23 @@ export class ProfilePageComponent implements OnInit {
         }
       });
     }
+  }
+
+  private loadRelationshipStatus(userId: string): void {
+    this.http.get<{ relationship: string; friendId: string | null }>(`${environment.apiUrl}/users/${userId}/status`).subscribe({
+      next: (res) => {
+        this.relationship = res.relationship;
+        this.friendId = res.friendId;
+      }
+    });
+  }
+
+  private loadProfileVisitors(): void {
+    if (!this.isOwnProfile) return;
+    this.http.get<{ visitors: any[] }>(`${environment.apiUrl}/users/me/visitors`).subscribe({
+      next: (res) => this.profileVisitors = res.visitors,
+      error: () => {}
+    });
   }
 
   private parseInterests(): void {
@@ -105,5 +149,119 @@ export class ProfilePageComponent implements OnInit {
   get joinedDate(): string {
     if (!this.user?.createdAt) return '';
     return new Date(this.user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }
+
+  startEdit(field: string, currentValue: string): void {
+    this.editingField = field;
+    this.editValue = currentValue || '';
+  }
+
+  cancelEdit(): void {
+    this.editingField = null;
+    this.editValue = '';
+  }
+
+  saveField(field: string): void {
+    const update: any = {};
+    update[field] = this.editValue;
+    this.http.patch(`${environment.apiUrl}/users/me/profile`, update).subscribe({
+      next: () => {
+        if (this.user) (this.user as any)[field] = this.editValue;
+        this.editingField = null;
+      },
+      error: () => {}
+    });
+  }
+
+  addInterest(): void {
+    const tag = this.newInterest.trim().toLowerCase();
+    if (!tag || this.interests.includes(tag)) return;
+    this.interests.push(tag);
+    this.newInterest = '';
+    this.saveInterests();
+  }
+
+  removeInterest(interest: string): void {
+    this.interests = this.interests.filter(i => i !== interest);
+    this.saveInterests();
+  }
+
+  private saveInterests(): void {
+    this.http.patch(`${environment.apiUrl}/users/me/profile`, { interests: JSON.stringify(this.interests) }).subscribe();
+  }
+
+  sendFriendRequest(): void {
+    if (!this.user) return;
+    this.friendService.sendRequest(this.user.id).subscribe({
+      next: () => {
+        this.relationship = 'REQUEST_SENT';
+        this.friendService.loadRequests();
+      },
+      error: (err) => {
+        if (err.error?.error?.includes('premium')) {
+          this.router.navigate(['/premium']);
+        }
+      }
+    });
+  }
+
+  unfriend(): void {
+    if (!this.friendId) return;
+    this.friendService.removeFriend(this.friendId).subscribe({
+      next: () => {
+        this.relationship = 'NONE';
+        this.friendId = null;
+        this.friendService.loadFriends();
+      }
+    });
+  }
+
+  startChat(): void {
+    if (!this.user) return;
+    this.router.navigate(['/messages'], { queryParams: { userId: this.user.id } });
+  }
+
+  blockUser(): void {
+    if (!this.user) return;
+    this.http.post(`${environment.apiUrl}/users/block`, { userId: this.user.id }).subscribe({
+      next: () => {
+        this.relationship = 'BLOCKED';
+      },
+      error: (err) => {
+        if (err.status === 409) this.relationship = 'BLOCKED';
+      }
+    });
+  }
+
+  unblockUser(): void {
+    if (!this.user) return;
+    this.http.delete(`${environment.apiUrl}/users/block/${this.user.id}`).subscribe({
+      next: () => {
+        this.relationship = 'NONE';
+        this.loadRelationshipStatus(this.user!.id);
+      }
+    });
+  }
+
+  openReportDialog(): void {
+    this.showReportDialog = true;
+    this.reportCategory = 'OTHER';
+    this.reportDescription = '';
+    this.reportSubmitted = false;
+  }
+
+  submitReport(): void {
+    if (!this.user || this.reportDescription.length < 10) return;
+    this.http.post(`${environment.apiUrl}/reports`, {
+      reportedUserId: this.user.id,
+      category: this.reportCategory,
+      description: this.reportDescription,
+    }).subscribe({
+      next: () => {
+        this.reportSubmitted = true;
+        setTimeout(() => this.showReportDialog = false, 2000);
+      },
+      error: () => {}
+    });
   }
 }

@@ -202,7 +202,7 @@ export default async function userRoutes(app: FastifyInstance) {
 
   app.get('/me/dashboard', { preHandler: authenticate }, async (req) => {
     const authUser = getAuthUser(req)!;
-    
+
     const [user, onlineCount] = await Promise.all([
       prisma.user.findUnique({
         where: { id: authUser.id },
@@ -220,37 +220,59 @@ export default async function userRoutes(app: FastifyInstance) {
       }),
       prisma.user.count({ where: { status: 'ONLINE' } }),
     ]);
-    
+
     return { stats: user, onlineCount };
+  });
+
+  // GET /me/visitors - Profile visitors
+  app.get('/me/visitors', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+
+    const views = await prisma.profileView.findMany({
+      where: { viewedUserId: authUser.id },
+      include: {
+        viewer: {
+          select: {
+            id: true,
+            displayName: true,
+            profilePicture: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    return { visitors: views.map(v => ({ ...v.viewer, viewedAt: v.createdAt })) };
   });
 
   app.get('/:id/mutual-friends', { preHandler: authenticate }, async (req) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const { id: otherUserId } = req.params as { id: string };
-    
+
     const userFriends = await prisma.friend.findMany({
       where: {
         OR: [{ senderId: userId }, { receiverId: userId }],
       },
     });
-    
+
     const userFriendIds = userFriends.map((f) => 
       f.senderId === userId ? f.receiverId : f.senderId
     );
-    
+
     const otherFriends = await prisma.friend.findMany({
       where: {
         OR: [{ senderId: otherUserId }, { receiverId: otherUserId }],
       },
     });
-    
+
     const otherFriendIds = otherFriends.map((f) =>
       f.senderId === otherUserId ? f.receiverId : f.senderId
     );
-    
+
     const mutualIds = userFriendIds.filter((id) => otherFriendIds.includes(id));
-    
+
     const mutualFriends = await prisma.user.findMany({
       where: { id: { in: mutualIds } },
       select: {
@@ -260,7 +282,100 @@ export default async function userRoutes(app: FastifyInstance) {
       },
       take: 20,
     });
-    
+
     return { mutualFriends, count: mutualIds.length };
+  });
+
+  // GET /:id/status - Check relationship status with another user
+  app.get('/:id/status', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const userId = authUser.id;
+    const { id: otherUserId } = req.params as { id: string };
+
+    const [friendRecord, friendRequestRecord, blockedRecord] = await Promise.all([
+      prisma.friend.findFirst({
+        where: {
+          OR: [
+            { senderId: userId, receiverId: otherUserId },
+            { senderId: otherUserId, receiverId: userId },
+          ],
+        },
+      }),
+      prisma.friendRequest.findFirst({
+        where: {
+          OR: [
+            { fromUserId: userId, toUserId: otherUserId },
+            { fromUserId: otherUserId, toUserId: userId },
+          ],
+        },
+      }),
+      prisma.blockedUser.findFirst({
+        where: {
+          OR: [
+            { userId, blockedUserId: otherUserId },
+            { userId: otherUserId, blockedUserId: userId },
+          ],
+        },
+      }),
+    ]);
+
+    let relationship: string;
+    if (blockedRecord) {
+      relationship = blockedRecord.userId === userId ? 'BLOCKED' : 'BLOCKED_BY';
+    } else if (friendRecord) {
+      relationship = 'FRIENDS';
+    } else if (friendRequestRecord) {
+      relationship = friendRequestRecord.fromUserId === userId ? 'REQUEST_SENT' : 'REQUEST_RECEIVED';
+    } else {
+      relationship = 'NONE';
+    }
+
+    return { relationship, friendId: friendRecord?.id || null };
+  });
+
+  // POST /block - Block a user
+  app.post('/block', { preHandler: authenticate }, async (req, reply) => {
+    const authUser = getAuthUser(req)!;
+    const { userId: blockedUserId } = req.body as { userId: string };
+
+    if (blockedUserId === authUser.id) {
+      return reply.status(400).send({ error: 'Cannot block yourself' });
+    }
+
+    const existing = await prisma.blockedUser.findUnique({
+      where: { userId_blockedUserId: { userId: authUser.id, blockedUserId } },
+    });
+
+    if (existing) {
+      return reply.status(409).send({ error: 'User already blocked' });
+    }
+
+    await prisma.blockedUser.create({
+      data: { userId: authUser.id, blockedUserId },
+    });
+
+    // Remove friendship if exists
+    await prisma.friend.deleteMany({
+      where: {
+        OR: [
+          { senderId: authUser.id, receiverId: blockedUserId },
+          { senderId: blockedUserId, receiverId: authUser.id },
+        ],
+      },
+    });
+
+    return { success: true };
+  });
+
+  // DELETE /block/:id - Unblock a user
+  app.delete('/block/:id', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
+    const { id: blockedUserId } = req.params as { id: string };
+
+    await prisma.blockedUser.deleteMany({
+      where: { userId: authUser.id, blockedUserId },
+    });
+
+    return { success: true };
   });
 }

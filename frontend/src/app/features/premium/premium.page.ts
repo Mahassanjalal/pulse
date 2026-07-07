@@ -58,25 +58,27 @@ import { SharedModule } from '@shared/shared.module';
 export class PremiumPageComponent {
   plans = [
     {
-      name: 'Basic', price: 4.99, popular: false, cta: 'Get Started',
-      features: ['Gender Filter', 'HD Video', 'Ad-Free', 'Basic Support']
+      name: 'Silver', price: 9.99, popular: false, cta: 'Get Silver',
+      features: ['Ad-Free Experience', 'HD Video (720p)', 'Send & Accept Friend Requests', 'Advanced Filters (Gender & Location)', 'Basic Support', 'Silver Premium Badge']
     },
     {
-      name: 'Premium', price: 9.99, popular: true, cta: 'Upgrade Now',
-      features: ['Everything in Basic', 'Global Travel Mode', 'Premium Badge', 'Priority Support', 'Advanced Filters']
+      name: 'Gold', price: 19.99, popular: true, cta: 'Upgrade to Gold',
+      features: ['Everything in Silver', 'Full HD Video (1080p)', 'Global Travel Mode', 'Incognito Mode', 'Priority Support', 'Gold Premium Badge', 'Custom Themes']
     },
     {
-      name: 'Ultimate', price: 19.99, popular: false, cta: 'Go Ultimate',
-      features: ['Everything in Premium', 'Incognito Mode', 'AI Matchmaking', '24/7 VIP Support', 'Custom Themes']
+      name: 'Platinum', price: 29.99, popular: false, cta: 'Go Platinum',
+      features: ['Everything in Gold', 'AI-Enhanced Matchmaking', 'Animated Premium Badge', '24/7 VIP Dedicated Support', 'Unlimited Global Travel', 'Exclusive Custom Themes', 'Priority in Matching Queue']
     }
   ];
 
   premiumFeatures = [
-    { icon: 'wc', title: 'Gender Preference', desc: 'Find exactly who you\'re looking for with advanced gender filters.', bg: 'bg-secondary-fixed/20', iconColor: 'text-secondary-fixed' },
-    { icon: 'hd', title: 'HD Video Quality', desc: 'Crystal clear 1080p discovery with enhanced low-light mode.', bg: 'bg-primary/20', iconColor: 'text-primary' },
-    { icon: 'public', title: 'Global Travel Mode', desc: 'Match with any country instantly, no restrictions.', bg: 'bg-tertiary/20', iconColor: 'text-tertiary' },
-    { icon: 'ad_off', title: 'Ad-Free Experience', desc: 'No interruptions, just pure discovery.', bg: 'bg-yellow-400/20', iconColor: 'text-yellow-400' },
-    { icon: 'verified', title: 'Premium Badge', desc: 'Stand out with an exclusive Premium badge on your profile.', bg: 'bg-primary/20', iconColor: 'text-primary' },
-    { icon: 'support_agent', title: 'Priority Support', desc: 'Get help faster with priority access to our support team.', bg: 'bg-secondary-fixed/20', iconColor: 'text-secondary-fixed' }
+    { icon: 'person_add', title: 'Send & Accept Friend Requests', desc: 'Connect with people you vibe with. Send and accept friend requests to build your network.', bg: 'bg-secondary-fixed/20', iconColor: 'text-secondary-fixed' },
+    { icon: 'wc', title: 'Gender & Location Filters', desc: 'Find exactly who you\'re looking for with advanced gender and location filters.', bg: 'bg-primary/20', iconColor: 'text-primary' },
+    { icon: 'hd', title: 'HD Video Quality', desc: 'Crystal clear 720p/1080p discovery with enhanced low-light mode.', bg: 'bg-tertiary/20', iconColor: 'text-tertiary' },
+    { icon: 'public', title: 'Global Travel Mode', desc: 'Match with any country instantly, no restrictions.', bg: 'bg-yellow-400/20', iconColor: 'text-yellow-400' },
+    { icon: 'ad_off', title: 'Ad-Free Experience', desc: 'No interruptions, just pure discovery.', bg: 'bg-primary/20', iconColor: 'text-primary' },
+    { icon: 'verified', title: 'Premium Badge', desc: 'Stand out with an exclusive Premium badge on your profile.', bg: 'bg-secondary-fixed/20', iconColor: 'text-secondary-fixed' },
+    { icon: 'support_agent', title: 'Priority Support', desc: 'Get help faster with priority access to our support team.', bg: 'bg-primary/20', iconColor: 'text-primary' },
+    { icon: 'visibility_off', title: 'Incognito Mode', desc: 'Browse profiles discreetly without being seen.', bg: 'bg-tertiary/20', iconColor: 'text-tertiary' },
   ];
 }

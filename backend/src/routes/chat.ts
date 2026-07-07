@@ -8,10 +8,26 @@ export default async function chatRoutes(app: FastifyInstance) {
   app.get('/conversations', { preHandler: authenticate }, async (req) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
-    
+
+    // Get all friends of the current user
+    const friendships = await prisma.friend.findMany({
+      where: {
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      select: {
+        senderId: true,
+        receiverId: true,
+      },
+    });
+
+    const friendIds = friendships.map(f => f.senderId === userId ? f.receiverId : f.senderId);
+
     const matches = await prisma.match.findMany({
       where: {
-        OR: [{ user1Id: userId }, { user2Id: userId }],
+        OR: [
+          { user1Id: userId, user2Id: { in: friendIds } },
+          { user2Id: userId, user1Id: { in: friendIds } },
+        ],
         status: 'ENDED',
       },
       include: {
@@ -64,11 +80,26 @@ export default async function chatRoutes(app: FastifyInstance) {
         OR: [{ user1Id: userId }, { user2Id: userId }],
       },
     });
-    
+
     if (!match) {
       return { error: 'Conversation not found' };
     }
-    
+
+    // Check if users are friends
+    const peerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const areFriends = await prisma.friend.findFirst({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: peerId },
+          { senderId: peerId, receiverId: userId },
+        ],
+      },
+    });
+
+    if (!areFriends) {
+      return { error: 'You must be friends to view messages. Send a friend request first.' };
+    }
+
     const where: Record<string, any> = { matchId };
     if (cursor) {
       where.id = { lt: cursor };
@@ -117,8 +148,22 @@ export default async function chatRoutes(app: FastifyInstance) {
     if (!match) {
       return { error: 'Conversation not found' };
     }
-    
+
     const receiverId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    // Check if users are friends
+    const areFriends = await prisma.friend.findFirst({
+      where: {
+        OR: [
+          { senderId: userId, receiverId },
+          { senderId: receiverId, receiverId: userId },
+        ],
+      },
+    });
+
+    if (!areFriends) {
+      return { error: 'You must be friends to send messages. Send a friend request first.' };
+    }
 
     if (await isBlocked(userId, receiverId)) {
       return { error: 'Cannot send message to this user' };

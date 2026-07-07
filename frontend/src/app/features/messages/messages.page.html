@@ -66,8 +66,20 @@
           </div>
         </div>
 
+        <!-- Friend Request Prompt -->
+        <div *ngIf="chatError" class="flex-1 flex items-center justify-center p-lg">
+          <div class="text-center max-w-sm">
+            <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-md">person_add</span>
+            <p class="font-body text-body-lg text-on-surface mb-sm">{{ chatError }}</p>
+            <p class="font-body text-body-md text-on-surface-variant mb-lg">Send a friend request to start chatting with this person.</p>
+            <button class="bg-primary text-on-primary px-xl py-md rounded-xl font-label text-label-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+              Send Friend Request
+            </button>
+          </div>
+        </div>
+
         <!-- Messages -->
-        <div class="flex-1 overflow-y-auto p-lg space-y-md">
+        <div *ngIf="!chatError" class="flex-1 overflow-y-auto p-lg space-y-md">
           <div *ngFor="let msg of messages"
             class="flex"
             [ngClass]="msg.self ? 'justify-end' : 'justify-start'">
@@ -91,7 +103,7 @@
         </div>
 
         <!-- Message Input -->
-        <div class="p-md border-t border-white/10 flex items-center gap-sm flex-shrink-0">
+        <div *ngIf="!chatError" class="p-md border-t border-white/10 flex items-center gap-sm flex-shrink-0">
           <button class="p-sm rounded-full hover:bg-white/5 transition-all">
             <span class="material-symbols-outlined text-on-surface-variant">add_circle</span>
           </button>

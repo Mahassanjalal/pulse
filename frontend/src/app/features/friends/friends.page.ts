@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { FriendService, Friend, FriendRequest } from '../../core/services/friend.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'pulse-friends',
@@ -12,7 +13,7 @@ export class FriendsPageComponent implements OnInit {
   receivedRequests: FriendRequest[] = [];
   searchQuery = '';
 
-  constructor(private friendService: FriendService, private router: Router) {}
+  constructor(private friendService: FriendService, private router: Router, public authService: AuthService) {}
 
   ngOnInit(): void {
     this.friendService.loadFriends();

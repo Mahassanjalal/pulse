@@ -1,113 +1,259 @@
-<!-- Hero Section -->
-<section class="relative h-96 w-full overflow-hidden" pulseParticlesBg>
-  <div class="absolute inset-0 bg-cover bg-center" [style.background-image]="user?.coverImage ? 'url(' + user?.coverImage + ')' : 'url(https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&q=80)'">
-    </div>
-  <div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent"></div>
-  <div class="absolute bottom-0 left-0 w-full px-xl pb-lg flex flex-col md:flex-row items-end gap-lg">
-    <div class="relative group">
-      <div class="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-surface overflow-hidden shadow-2xl relative z-10">
-        <img class="w-full h-full object-cover" [src]="user?.profilePicture || 'https://i.pravatar.cc/200?img=7'" alt="Profile" />
-      </div>
-      <div *ngIf="user?.isVerified" class="absolute bottom-1 right-1 z-20 bg-tertiary w-8 h-8 rounded-full flex items-center justify-center border-2 border-surface">
-        <span class="material-symbols-outlined text-on-tertiary text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
-      </div>
-    </div>
-    <div class="flex-1 pb-md">
-      <div class="flex flex-wrap items-center gap-sm mb-xs">
-        <h2 class="font-headline text-headline-lg text-on-surface tracking-tight">{{ user?.displayName || 'Loading...' }}</h2>
-        <span *ngIf="user?.isVerified" class="bg-secondary-fixed text-on-secondary-fixed px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Verified</span>
-        <span *ngIf="user?.isPremium" class="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Premium</span>
-      </div>
-      <p class="text-on-surface-variant font-body text-body-lg flex items-center gap-xs">
-        <span class="material-symbols-outlined text-primary text-base">location_on</span>
-        {{ user?.country || 'Unknown' }} · {{ user?.age || '--' }} years old
-      </p>
-    </div>
-    <div class="flex gap-md mb-md" *ngIf="!isOwnProfile">
-      <button class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
-        <span class="material-symbols-outlined">favorite</span>
-        Favorite
-      </button>
-      <button class="bg-primary text-on-primary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold neon-glow-primary active:scale-95 transition-all">
-        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
-        Message
-      </button>
-    </div>
-  </div>
-</section>
+<div *ngIf="isLoading" class="flex items-center justify-center h-96">
+  <span class="material-symbols-outlined text-4xl text-primary pulse-animation">sync</span>
+</div>
 
-<!-- Bento Grid Layout -->
-<div class="px-xl mt-lg grid grid-cols-1 lg:grid-cols-12 gap-lg pb-xl">
-  <!-- Left Column: Bio & Stats -->
-  <div class="lg:col-span-8 flex flex-col gap-lg">
-    <!-- Bio -->
-    <div class="glass-panel p-lg rounded-2xl border border-white/10">
-      <h3 class="font-headline text-headline-md text-primary mb-md">About</h3>
-      <p class="text-on-surface-variant leading-relaxed text-body-lg">
-        {{ user?.bio || 'No bio yet.' }}
-      </p>
-      <div class="mt-lg flex flex-wrap gap-sm">
-        <span *ngFor="let interest of interests" class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant">#{{ interest }}</span>
-        <button *ngIf="isOwnProfile" class="bg-surface-container-low px-md py-sm rounded-full text-label-md border border-dashed border-white/20 text-on-surface-variant/50 hover:border-primary hover:text-primary transition-colors">
-          + Add Interest
+<div *ngIf="!isLoading">
+  <!-- Hero Section -->
+  <section class="relative h-96 w-full overflow-hidden">
+    <div class="absolute inset-0 bg-cover bg-center" [style.background-image]="user?.coverImage ? 'url(' + user?.coverImage + ')' : 'url(https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&q=80)'">
+    </div>
+    <div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent"></div>
+    <div class="absolute bottom-0 left-0 w-full px-xl pb-lg flex flex-col md:flex-row items-end gap-lg">
+      <div class="relative group">
+        <div class="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-surface overflow-hidden shadow-2xl relative z-10">
+          <img class="w-full h-full object-cover" [src]="user?.profilePicture || 'https://i.pravatar.cc/200?img=7'" alt="Profile" />
+        </div>
+        <div *ngIf="user?.isVerified" class="absolute bottom-1 right-1 z-20 bg-tertiary w-8 h-8 rounded-full flex items-center justify-center border-2 border-surface">
+          <span class="material-symbols-outlined text-on-tertiary text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+        </div>
+        <button *ngIf="isOwnProfile" (click)="startEdit('profilePicture', user?.profilePicture || '')" class="absolute top-1 right-1 z-20 bg-surface/80 w-8 h-8 rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+          <span class="material-symbols-outlined text-on-surface text-sm">photo_camera</span>
+        </button>
+      </div>
+      <div class="flex-1 pb-md">
+        <div class="flex flex-wrap items-center gap-sm mb-xs">
+          <div *ngIf="editingField === 'displayName'; else displayNameBlock">
+            <input [(ngModel)]="editValue" (keyup.enter)="saveField('displayName')" (blur)="saveField('displayName')" class="bg-surface-container border border-white/10 rounded-lg px-md py-sm text-headline-lg text-on-surface font-headline focus:outline-none focus:border-primary" />
+          </div>
+          <ng-template #displayNameBlock>
+            <h2 class="font-headline text-headline-lg text-on-surface tracking-tight">{{ user?.displayName || 'Loading...' }}</h2>
+            <button *ngIf="isOwnProfile" (click)="startEdit('displayName', user?.displayName || '')" class="material-symbols-outlined text-on-surface-variant hover:text-primary text-body-md">edit</button>
+          </ng-template>
+          <span *ngIf="user?.isVerified" class="bg-secondary-fixed text-on-secondary-fixed px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Verified</span>
+          <span *ngIf="user?.isPremium" class="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Premium</span>
+        </div>
+        <p class="text-on-surface-variant font-body text-body-lg flex items-center gap-xs">
+          <span class="material-symbols-outlined text-primary text-base">location_on</span>
+          {{ user?.country || 'Unknown' }} · {{ user?.age || '--' }} years old · {{ user?.gender || 'N/A' }}
+        </p>
+      </div>
+
+      <!-- Action Buttons for other users -->
+      <div class="flex gap-md mb-md flex-wrap" *ngIf="!isOwnProfile && user">
+        <!-- Add Friend / Friend Request Sent / Friends -->
+        <ng-container [ngSwitch]="relationship">
+          <button *ngSwitchCase="'NONE'" (click)="sendFriendRequest()"
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
+            <span class="material-symbols-outlined">person_add</span>
+            Add Friend
+          </button>
+          <button *ngSwitchCase="'REQUEST_SENT'" disabled
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface-variant border border-white/10 opacity-60 cursor-not-allowed">
+            <span class="material-symbols-outlined">pending</span>
+            Request Sent
+          </button>
+          <button *ngSwitchCase="'REQUEST_RECEIVED'" (click)="sendFriendRequest()"
+            class="bg-tertiary text-on-tertiary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold active:scale-95 transition-all">
+            <span class="material-symbols-outlined">person_add</span>
+            Accept Request
+          </button>
+          <ng-container *ngSwitchCase="'FRIENDS'">
+            <button (click)="startChat()"
+              class="bg-primary text-on-primary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold neon-glow-primary active:scale-95 transition-all">
+              <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">chat</span>
+              Message
+            </button>
+            <button (click)="unfriend()"
+              class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
+              <span class="material-symbols-outlined">person_remove</span>
+              Unfriend
+            </button>
+          </ng-container>
+          <span *ngSwitchCase="'BLOCKED'" class="text-on-surface-variant text-body-md flex items-center gap-xs">
+            <span class="material-symbols-outlined">block</span> Blocked
+          </span>
+        </ng-container>
+
+        <!-- Report & Block actions -->
+        <button (click)="openReportDialog()"
+          class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
+          <span class="material-symbols-outlined">flag</span>
+          Report
+        </button>
+        <ng-container [ngSwitch]="relationship">
+          <button *ngSwitchDefault (click)="blockUser()"
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-error hover:bg-error/10 active:scale-95 transition-all border border-white/10">
+            <span class="material-symbols-outlined">block</span>
+            Block
+          </button>
+          <button *ngSwitchCase="'BLOCKED'" (click)="unblockUser()"
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
+            <span class="material-symbols-outlined">check</span>
+            Unblock
+          </button>
+        </ng-container>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bento Grid Layout -->
+  <div class="px-xl mt-lg grid grid-cols-1 lg:grid-cols-12 gap-lg pb-xl">
+    <!-- Left Column -->
+    <div class="lg:col-span-8 flex flex-col gap-lg">
+      <!-- Bio -->
+      <div class="glass-panel p-lg rounded-2xl border border-white/10">
+        <div class="flex items-center justify-between mb-md">
+          <h3 class="font-headline text-headline-md text-primary">About</h3>
+          <button *ngIf="isOwnProfile && editingField !== 'bio'" (click)="startEdit('bio', user?.bio || '')" class="material-symbols-outlined text-on-surface-variant hover:text-primary text-body-md">edit</button>
+        </div>
+        <ng-container *ngIf="editingField === 'bio'; else bioDisplay">
+          <textarea [(ngModel)]="editValue" (keyup.enter)="saveField('bio')" (blur)="saveField('bio')" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-lg text-on-surface focus:outline-none focus:border-primary" rows="3" maxlength="500"></textarea>
+          <p class="text-label-sm text-on-surface-variant mt-xs">{{ editValue.length }}/500</p>
+        </ng-container>
+        <ng-template #bioDisplay>
+          <p class="text-on-surface-variant leading-relaxed text-body-lg">{{ user?.bio || 'No bio yet.' }}</p>
+        </ng-template>
+
+        <!-- Interests -->
+        <div class="mt-lg">
+          <div class="flex items-center justify-between mb-sm">
+            <h4 class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest">Interests</h4>
+            <button *ngIf="isOwnProfile" (click)="startEdit('interests', '')" class="text-primary text-label-sm hover:underline">Edit</button>
+          </div>
+          <div class="flex flex-wrap gap-sm">
+            <ng-container *ngFor="let interest of interests">
+              <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant flex items-center gap-xs">
+                #{{ interest }}
+                <span *ngIf="isOwnProfile" (click)="removeInterest(interest)" class="material-symbols-outlined text-sm cursor-pointer hover:text-error" style="font-size: 14px;">close</span>
+              </span>
+            </ng-container>
+            <div *ngIf="isOwnProfile" class="flex items-center gap-xs">
+              <input [(ngModel)]="newInterest" (keyup.enter)="addInterest()" placeholder="+ Add" class="bg-surface-container-low px-md py-sm rounded-full text-label-md border border-dashed border-white/20 text-on-surface-variant/50 focus:outline-none focus:border-primary focus:text-on-surface transition-colors w-24" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Social Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+        <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-primary/40 transition-colors">
+          <span class="material-symbols-outlined text-primary text-4xl mb-sm group-hover:scale-110 transition-transform">forum</span>
+          <span class="font-headline text-headline-md text-on-surface">{{ user?.totalConversations || 0 }}</span>
+          <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Conversations</span>
+        </div>
+        <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-secondary-fixed/40 transition-colors">
+          <span class="material-symbols-outlined text-secondary-fixed text-4xl mb-sm group-hover:scale-110 transition-transform">group_add</span>
+          <span class="font-headline text-headline-md text-on-surface">{{ user?.friendsCount || 0 }}</span>
+          <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Friends</span>
+        </div>
+        <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-tertiary/40 transition-colors">
+          <span class="material-symbols-outlined text-tertiary text-4xl mb-sm group-hover:scale-110 transition-transform">calendar_month</span>
+          <span class="font-headline text-headline-md text-on-surface">{{ joinedDate }}</span>
+          <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Joined Pulse</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="lg:col-span-4 flex flex-col gap-lg">
+      <!-- Trust Score Gauge -->
+      <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center">
+        <h3 class="font-headline text-headline-md text-primary mb-lg w-full text-left">Trust Score</h3>
+        <div class="relative w-40 h-40 flex items-center justify-center mb-md">
+          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
+            <circle cx="50" cy="50" r="40" fill="none" stroke="#2ae500" stroke-width="8"
+              [attr.stroke-dasharray]="251.2"
+              [attr.stroke-dashoffset]="251.2 - (251.2 * (user?.trustScore || 0) / 100)"
+              stroke-linecap="round"/>
+          </svg>
+          <div class="text-center z-10">
+            <p class="font-headline text-2xl font-bold text-tertiary">{{ user?.trustScore || 0 }}</p>
+            <p class="text-label-sm text-on-surface-variant">/ 100</p>
+          </div>
+        </div>
+        <p class="font-label text-label-sm text-on-surface-variant">Trust rating based on {{ user?.totalConversations || 0 }} interactions</p>
+      </div>
+
+      <!-- Mutual Friends -->
+      <div *ngIf="!isOwnProfile" class="glass-panel p-lg rounded-2xl border border-white/10">
+        <h3 class="font-headline text-headline-md text-on-surface mb-md">Mutual Friends</h3>
+        <div class="flex -space-x-3 mb-md">
+          <div *ngFor="let friend of mutualFriends.slice(0, 3)" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
+            <img class="w-full h-full object-cover" [src]="friend.profilePicture || 'https://i.pravatar.cc/60?img=1'" [alt]="friend.displayName" />
+          </div>
+          <div *ngIf="mutualFriendsCount > 3" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center">
+            <span class="font-label text-label-sm text-on-surface-variant">+{{ mutualFriendsCount - 3 }}</span>
+          </div>
+        </div>
+        <p *ngIf="mutualFriendsCount > 0" class="font-label text-label-sm text-on-surface-variant">You share {{ mutualFriendsCount }} mutual friends</p>
+        <p *ngIf="mutualFriendsCount === 0" class="font-label text-label-sm text-on-surface-variant">No mutual friends</p>
+      </div>
+
+      <!-- Profile Visitors - only for own profile -->
+      <div *ngIf="isOwnProfile && profileVisitors.length > 0" class="glass-panel p-lg rounded-2xl border border-white/10">
+        <h3 class="font-headline text-headline-md text-on-surface mb-md">Profile Visitors</h3>
+        <div class="flex -space-x-3 mb-md">
+          <div *ngFor="let visitor of profileVisitors.slice(0, 5)" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
+            <img class="w-full h-full object-cover" [src]="visitor.profilePicture || 'https://i.pravatar.cc/60?img=1'" [alt]="visitor.displayName" />
+          </div>
+          <div *ngIf="profileVisitors.length > 5" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center">
+            <span class="font-label text-label-sm text-on-surface-variant">+{{ profileVisitors.length - 5 }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Danger Zone - only for own profile -->
+      <div *ngIf="isOwnProfile" class="glass-panel p-lg rounded-2xl border border-error/20">
+        <h3 class="font-headline text-headline-md text-error mb-xs">Danger Zone</h3>
+        <p class="text-on-surface-variant text-body-md mb-md">Permanently delete your account and all data.</p>
+        <button class="w-full bg-error/10 text-error px-lg py-md rounded-xl font-body font-bold border border-error/30 hover:bg-error/20 active:scale-95 transition-all">
+          Delete Account
         </button>
       </div>
     </div>
-
-    <!-- Social Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
-      <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-primary/40 transition-colors">
-        <span class="material-symbols-outlined text-primary text-4xl mb-sm group-hover:scale-110 transition-transform">forum</span>
-        <span class="font-headline text-headline-md text-on-surface">{{ user?.totalConversations || 0 }}</span>
-        <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Conversations</span>
-      </div>
-      <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-secondary-fixed/40 transition-colors">
-        <span class="material-symbols-outlined text-secondary-fixed text-4xl mb-sm group-hover:scale-110 transition-transform">group_add</span>
-        <span class="font-headline text-headline-md text-on-surface">{{ user?.friendsCount || 0 }}</span>
-        <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Friends</span>
-      </div>
-      <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-tertiary/40 transition-colors">
-        <span class="material-symbols-outlined text-tertiary text-4xl mb-sm group-hover:scale-110 transition-transform">calendar_month</span>
-        <span class="font-headline text-headline-md text-on-surface">{{ joinedDate }}</span>
-        <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Joined Pulse</span>
-      </div>
-    </div>
   </div>
+</div>
 
-  <!-- Right Column: Trust Score & Privacy -->
-  <div class="lg:col-span-4 flex flex-col gap-lg">
-    <!-- Trust Score Gauge -->
-    <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center">
-      <h3 class="font-headline text-headline-md text-primary mb-lg w-full text-left">Trust Score</h3>
-      <div class="relative w-40 h-40 flex items-center justify-center mb-md">
-        <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
-          <circle cx="50" cy="50" r="40" fill="none" stroke="#2ae500" stroke-width="8"
-            [attr.stroke-dasharray]="251.2"
-            [attr.stroke-dashoffset]="251.2 - (251.2 * (user?.trustScore || 0) / 100)"
-            stroke-linecap="round"/>
-        </svg>
-        <div class="text-center z-10">
-          <p class="font-headline text-2xl font-bold text-tertiary">{{ user?.trustScore || 0 }}</p>
-          <p class="text-label-sm text-on-surface-variant">/ 100</p>
-        </div>
+<!-- Report User Dialog -->
+<div *ngIf="showReportDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" (click)="showReportDialog = false">
+  <div class="glass-panel rounded-2xl border border-white/10 p-xl max-w-md w-full mx-md" (click)="$event.stopPropagation()">
+    <ng-container *ngIf="!reportSubmitted; else reportSuccess">
+      <div class="flex items-center justify-between mb-lg">
+        <h3 class="font-headline text-headline-md text-on-surface">Report User</h3>
+        <button (click)="showReportDialog = false" class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">close</button>
       </div>
-      <p class="font-label text-label-sm text-on-surface-variant">Trust rating based on {{ user?.totalConversations || 0 }} interactions</p>
-    </div>
-
-    <!-- Mutual Friends -->
-    <div *ngIf="!isOwnProfile" class="glass-panel p-lg rounded-2xl border border-white/10">
-      <h3 class="font-headline text-headline-md text-on-surface mb-md">Mutual Friends</h3>
-      <div class="flex -space-x-3 mb-md">
-        <div *ngFor="let friend of mutualFriends.slice(0, 3)" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
-          <img class="w-full h-full object-cover" [src]="friend.profilePicture || 'https://i.pravatar.cc/60?img=1'" [alt]="friend.displayName" />
-        </div>
-        <div *ngIf="mutualFriendsCount > 3" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center">
-          <span class="font-label text-label-sm text-on-surface-variant">+{{ mutualFriendsCount - 3 }}</span>
-        </div>
+      <div class="mb-md">
+        <label class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-sm block">Category</label>
+        <select [(ngModel)]="reportCategory" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-md text-on-surface focus:outline-none focus:border-primary">
+          <option value="NUDITY">Nudity</option>
+          <option value="HARASSMENT">Harassment</option>
+          <option value="HATE_SPEECH">Hate Speech</option>
+          <option value="VIOLENCE">Violence</option>
+          <option value="FAKE_PROFILE">Fake Profile</option>
+          <option value="SPAM">Spam</option>
+          <option value="UNDERAGE">Underage User</option>
+          <option value="OFFENSIVE">Offensive Content</option>
+          <option value="SCAMS">Scams</option>
+          <option value="OTHER">Other</option>
+        </select>
       </div>
-      <p *ngIf="mutualFriendsCount > 0" class="font-label text-label-sm text-on-surface-variant">You share {{ mutualFriendsCount }} mutual friends</p>
-      <p *ngIf="mutualFriendsCount === 0" class="font-label text-label-sm text-on-surface-variant">No mutual friends</p>
-    </div>
+      <div class="mb-lg">
+        <label class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-sm block">Description</label>
+        <textarea [(ngModel)]="reportDescription" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-md text-on-surface focus:outline-none focus:border-primary" rows="4" placeholder="Please describe the issue (minimum 10 characters)..." maxlength="2000"></textarea>
+        <p class="text-label-sm text-on-surface-variant mt-xs">{{ reportDescription.length }}/2000</p>
+      </div>
+      <button (click)="submitReport()" [disabled]="reportDescription.length < 10"
+        class="w-full bg-error text-on-error py-md rounded-xl font-body font-bold active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+        Submit Report
+      </button>
+    </ng-container>
+    <ng-template #reportSuccess>
+      <div class="text-center py-lg">
+        <span class="material-symbols-outlined text-5xl text-tertiary mb-md" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+        <h3 class="font-headline text-headline-md text-on-surface mb-sm">Report Submitted</h3>
+        <p class="text-on-surface-variant">Thank you. Our team will review this report.</p>
+      </div>
+    </ng-template>
   </div>
 </div>

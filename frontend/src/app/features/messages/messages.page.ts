@@ -13,6 +13,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   newMessage = '';
   conversations: Conversation[] = [];
   messages: any[] = [];
+  chatError: string | null = null;
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -61,6 +62,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   selectConversation(convId: string): void {
     this.activeChat = convId;
     this.messages = [];
+    this.chatError = null;
     this.chatService.getMessages(convId).subscribe({
       next: (res) => {
         const userId = localStorage.getItem('userId');
@@ -70,12 +72,20 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
           self: m.senderId === userId,
           time: new Date(m.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }));
+      },
+      error: (err) => {
+        if (err.error?.error) {
+          this.chatError = err.error.error;
+        } else {
+          this.chatError = 'Could not load messages.';
+        }
       }
     });
   }
 
   sendMessage(): void {
     if (!this.newMessage.trim() || !this.activeChat) return;
+    if (this.chatError) return;
     const content = this.newMessage.trim();
     this.newMessage = '';
     this.chatService.sendMessage(this.activeChat, content);

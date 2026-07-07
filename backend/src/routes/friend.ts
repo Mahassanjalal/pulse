@@ -59,11 +59,15 @@ export default async function friendRoutes(app: FastifyInstance) {
     return { received, sent };
   });
 
-  app.post('/request', { preHandler: authenticate }, async (req) => {
+  app.post('/request', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const { toUserId } = req.body as { toUserId: string };
-    
+
+    if (!authUser.isPremium) {
+      return reply.status(403).send({ error: 'Friend requests are a premium feature. Upgrade to send friend requests.' });
+    }
+
     if (toUserId === userId) {
       return { error: 'Cannot send friend request to yourself' };
     }
@@ -111,11 +115,15 @@ export default async function friendRoutes(app: FastifyInstance) {
     return { friendRequest };
   });
 
-  app.post('/requests/:id/accept', { preHandler: authenticate }, async (req) => {
+  app.post('/requests/:id/accept', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const { id } = req.params as { id: string };
-    
+
+    if (!authUser.isPremium) {
+      return reply.status(403).send({ error: 'Accepting friend requests is a premium feature. Upgrade to accept.' });
+    }
+
     const friendRequest = await prisma.friendRequest.findFirst({
       where: { id, toUserId: userId, status: 'PENDING' },
     });
