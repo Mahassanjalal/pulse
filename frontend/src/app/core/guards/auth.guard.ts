@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { CanActivate, Router } from '@angular/router';
 import { AuthService } from '@core/services/auth.service';
+import { Observable } from 'rxjs';
+import { filter, take, map } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
@@ -8,12 +10,18 @@ import { AuthService } from '@core/services/auth.service';
 export class AuthGuard implements CanActivate {
   constructor(private authService: AuthService, private router: Router) {}
 
-  canActivate(): boolean {
-    if (this.authService.isAuthenticated()) {
-      return true;
-    }
-    this.router.navigate(['/login']);
-    return false;
+  canActivate(): Observable<boolean> {
+    return this.authService.loading$.pipe(
+      filter(loading => !loading),
+      take(1),
+      map(() => {
+        if (this.authService.isAuthenticated()) {
+          return true;
+        }
+        this.router.navigate(['/login']);
+        return false;
+      })
+    );
   }
 }
 
@@ -23,12 +31,18 @@ export class AuthGuard implements CanActivate {
 export class GuestGuard implements CanActivate {
   constructor(private authService: AuthService, private router: Router) {}
 
-  canActivate(): boolean {
-    if (!this.authService.isAuthenticated()) {
-      return true;
-    }
-    this.router.navigate(['/dashboard']);
-    return false;
+  canActivate(): Observable<boolean> {
+    return this.authService.loading$.pipe(
+      filter(loading => !loading),
+      take(1),
+      map(() => {
+        if (!this.authService.isAuthenticated()) {
+          return true;
+        }
+        this.router.navigate(['/dashboard']);
+        return false;
+      })
+    );
   }
 }
 

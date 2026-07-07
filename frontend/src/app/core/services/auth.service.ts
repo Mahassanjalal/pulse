@@ -27,6 +27,8 @@ interface AuthResponse {
 })
 export class AuthService {
   private currentUser$ = new BehaviorSubject<User | null>(null);
+  private loadingSubject = new BehaviorSubject<boolean>(true);
+  public loading$ = this.loadingSubject.asObservable();
   private tokenKey = 'token';
   private refreshTokenKey = 'refreshToken';
   private userIdKey = 'userId';
@@ -43,9 +45,16 @@ export class AuthService {
     const token = localStorage.getItem(this.tokenKey);
     if (token) {
       this.fetchCurrentUser().subscribe({
-        next: () => this.socketService.connect(),
-        error: () => {}
+        next: () => {
+          this.socketService.connect();
+          this.loadingSubject.next(false);
+        },
+        error: () => {
+          this.loadingSubject.next(false);
+        }
       });
+    } else {
+      this.loadingSubject.next(false);
     }
   }
 

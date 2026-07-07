@@ -25,6 +25,7 @@ async function requestLogger(app: FastifyInstance) {
         correlationId,
         method: request.method,
         url: request.url,
+        body: JSON.stringify(request.body || {}),
         ip: request.ip,
         userAgent: request.headers['user-agent'],
       },
