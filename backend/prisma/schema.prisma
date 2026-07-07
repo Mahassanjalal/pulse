@@ -28,6 +28,10 @@ model User {
   isVerified          Boolean @default(false)
   isPremium           Boolean @default(false)
   isGuest             Boolean @default(false)
+
+  googleId            String? @unique
+  authProvider        String  @default("EMAIL")
+
   premiumUntil        DateTime?
   
   friendsCount        Int @default(0)

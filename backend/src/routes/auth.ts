@@ -1,11 +1,125 @@
 import { FastifyInstance } from 'fastify';
 import argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
+import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../lib/prisma';
 import { RegisterSchema, LoginSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
 
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 export default async function authRoutes(app: FastifyInstance) {
+  // POST /api/v1/auth/google - Sign in with Google
+  app.post('/google', async (req, reply) => {
+    const { credential } = req.body as { credential: string };
+
+    if (!credential) {
+      reply.status(400);
+      return { error: 'Google credential is required' };
+    }
+
+    let payload: any;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      reply.status(401);
+      return { error: 'Invalid Google credential' };
+    }
+
+    const googleId = payload.sub;
+    const email = payload.email;
+    const displayName = payload.name || email.split('@')[0];
+    const profilePicture = payload.picture || null;
+
+    if (!email) {
+      reply.status(400);
+      return { error: 'Google account must have an email address' };
+    }
+
+    let user;
+    let isNewUser = false;
+
+    // Look up by googleId first
+    user = await prisma.user.findUnique({ where: { googleId } });
+
+    if (user) {
+      // Existing Google user - log them in
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { status: 'ONLINE', lastSeen: new Date() },
+      });
+    } else {
+      // Check by email
+      const emailUser = await prisma.user.findUnique({ where: { email } });
+
+      if (emailUser) {
+        // Existing email user - auto-link Google account
+        user = await prisma.user.update({
+          where: { id: emailUser.id },
+          data: {
+            googleId,
+            authProvider: 'EMAIL_GOOGLE',
+            status: 'ONLINE',
+            lastSeen: new Date(),
+          },
+        });
+      } else {
+        // New user - create with Google
+        user = await prisma.user.create({
+          data: {
+            email,
+            username: email.split('@')[0] + '_' + uuidv4().slice(0, 4),
+            displayName,
+            googleId,
+            authProvider: 'GOOGLE',
+            password: '',
+            profilePicture,
+            status: 'ONLINE',
+          },
+        });
+        isNewUser = true;
+      }
+    }
+
+    await prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        ipAddress: req.ip || req.headers['x-forwarded-for'] as string || 'unknown',
+        userAgent: req.headers['user-agent'] || 'unknown',
+        device: req.headers['sec-ch-ua-platform'] as string || 'unknown',
+      },
+    });
+
+    const token = app.jwt.sign({ userId: user.id }, { expiresIn: '15m' });
+    const refreshToken = uuidv4();
+
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        displayName: user.displayName || displayName,
+        profilePicture: user.profilePicture || profilePicture,
+        isPremium: user.isPremium || false,
+        isVerified: user.isVerified || false,
+      },
+      token,
+      refreshToken,
+    };
+  });
+
   // POST /api/v1/auth/register
   app.post('/register', async (req, reply) => {
     const data = RegisterSchema.parse(req.body);
@@ -15,6 +129,10 @@ export default async function authRoutes(app: FastifyInstance) {
     });
     
     if (existing) {
+      if (existing.authProvider === 'GOOGLE') {
+        reply.status(409);
+        return { error: 'This email is linked to a Google account. Please sign in with Google.' };
+      }
       reply.status(409);
       return { error: 'Email or username already exists' };
     }
@@ -67,7 +185,12 @@ export default async function authRoutes(app: FastifyInstance) {
       reply.status(401);
       return { error: 'Invalid email or password' };
     }
-    
+
+    if (user.authProvider === 'GOOGLE') {
+      reply.status(401);
+      return { error: 'This email is linked to a Google account. Please sign in with Google.' };
+    }
+
     const valid = await argon2.verify(user.password, data.password);
     if (!valid) {
       reply.status(401);

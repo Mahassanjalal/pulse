@@ -80,8 +80,15 @@ export class AuthService {
     throw new Error('Registration failed');
   }
 
-  async loginWithGoogle(): Promise<User> {
-    throw new Error('Google login not yet implemented on backend');
+  async loginWithGoogle(credential: string): Promise<User> {
+    const res = await this.http.post<AuthResponse>(`${environment.apiUrl}/auth/google`, { credential }).toPromise();
+    if (res) {
+      this.storeTokens(res.token, res.refreshToken, res.user.id!);
+      this.currentUser$.next(res.user as User);
+      this.socketService.connect();
+      return res.user as User;
+    }
+    throw new Error('Google login failed');
   }
 
   async loginWithApple(): Promise<User> {
