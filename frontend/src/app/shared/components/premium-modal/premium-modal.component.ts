@@ -102,11 +102,17 @@ export class PremiumModalComponent implements OnInit {
 
   subscribe(planId: string): void {
     this.subscribing = true;
-    this.premiumService.subscribe(planId).subscribe({
-      next: () => {
-        this.authService.fetchCurrentUser().subscribe();
-        this.subscribing = false;
-        this.close();
+    this.premiumService.createCheckout(planId).subscribe({
+      next: (res: any) => {
+        if (res.url) {
+          // Redirect to Stripe Checkout; returns to /premium/success after payment.
+          window.location.href = res.url;
+          return;
+        }
+        // Dev mode (no Stripe keys): premium granted directly.
+        this.authService.fetchCurrentUser().subscribe({
+          next: () => { this.subscribing = false; this.close(); },
+        });
       },
       error: (err) => {
         this.error = err.error?.error || 'Subscription failed. Please try again.';

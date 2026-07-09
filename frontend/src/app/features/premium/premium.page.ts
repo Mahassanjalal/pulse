@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, ActivatedRoute } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { PremiumService } from '../../core/services/premium.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -10,6 +10,12 @@ import { PremiumPlan } from '@models/user.model';
   selector: 'pulse-premium',
   template: `
     <div class="p-lg md:p-xl max-w-6xl mx-auto">
+      <!-- Success banner -->
+      <div *ngIf="justUpgraded" class="mb-xl flex items-center gap-md p-lg rounded-2xl bg-tertiary/10 border border-tertiary/30">
+        <span class="material-symbols-outlined text-tertiary">celebration</span>
+        <p class="font-label-md text-label-md text-on-surface">Welcome to Pulse Premium! Your account has been upgraded.</p>
+      </div>
+
       <!-- Header -->
       <div class="text-center mb-xl">
         <div class="inline-block px-md py-xs rounded-full bg-primary/20 border border-primary/30 mb-lg">
@@ -105,10 +111,12 @@ export class PremiumPageComponent implements OnInit {
   isPremium = false;
   showCancelConfirm = false;
   cancelError = '';
+  justUpgraded = false;
 
   constructor(
     private premiumService: PremiumService,
-    private authService: AuthService
+    private authService: AuthService,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
@@ -116,6 +124,18 @@ export class PremiumPageComponent implements OnInit {
       this.isPremium = user?.isPremium || false;
     });
     this.loadPlans();
+
+    // If we returned from Stripe Checkout, verify the session and grant premium.
+    const sessionId = this.route.snapshot.queryParamMap.get('session_id');
+    if (sessionId) {
+      this.premiumService.getCheckoutStatus(sessionId).subscribe({
+        next: () => {
+          this.justUpgraded = true;
+          this.authService.fetchCurrentUser().subscribe();
+        },
+        error: () => this.authService.fetchCurrentUser().subscribe(),
+      });
+    }
   }
 
   loadPlans(): void {
@@ -135,8 +155,15 @@ export class PremiumPageComponent implements OnInit {
 
   subscribe(planId: string): void {
     this.subscribing = true;
-    this.premiumService.subscribe(planId).subscribe({
-      next: () => {
+    this.error = '';
+    this.premiumService.createCheckout(planId).subscribe({
+      next: (res: any) => {
+        if (res.url) {
+          // Redirect to Stripe Checkout; we return to /premium/success after payment.
+          window.location.href = res.url;
+          return;
+        }
+        // Dev mode (no Stripe keys): premium granted directly.
         this.authService.fetchCurrentUser().subscribe();
         this.subscribing = false;
       },

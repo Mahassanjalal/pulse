@@ -18,6 +18,22 @@ export class PremiumService {
     return this.http.get<{ subscription: SubscriptionInfo | null }>(`${environment.apiUrl}/premium/subscription`);
   }
 
+  /**
+   * Create a Stripe Checkout Session and return a redirect URL (or devMode
+   * grant). The caller should redirect the browser to `url`.
+   */
+  createCheckout(planId: string, period = 'monthly'): Observable<{ sessionId?: string; url?: string; devMode?: boolean; subscription?: SubscriptionInfo }> {
+    return this.http.post(`${environment.apiUrl}/premium/create-checkout`, { planId, period });
+  }
+
+  /**
+   * Verify a completed Checkout Session after returning from Stripe and grant
+   * premium if the payment succeeded.
+   */
+  getCheckoutStatus(sessionId: string): Observable<{ devMode?: boolean; isPremium: boolean; premiumUntil?: string }> {
+    return this.http.get(`${environment.apiUrl}/premium/checkout-status`, { params: { session_id: sessionId } });
+  }
+
   subscribe(planId: string, period = 'monthly'): Observable<{ subscription: SubscriptionInfo }> {
     return this.http.post<{ subscription: SubscriptionInfo }>(`${environment.apiUrl}/premium/subscribe`, { planId, period });
   }

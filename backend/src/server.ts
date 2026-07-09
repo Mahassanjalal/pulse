@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { prisma } from './lib/prisma';
 import { registerRoutes } from './routes';
 import { setupSocketHandlers } from './socket/handlers';
+import { handleStripeWebhook } from './routes/premium';
 import requestLogger from './plugins/request-logger';
 
 const app = fastify({
@@ -35,6 +36,18 @@ async function start() {
 
   app.decorateRequest('authUser', null);
 
+  // Capture the raw request body for JSON so the Stripe webhook can verify the
+  // signature (constructEvent needs the unparsed bytes). The parsed object is
+  // still available as req.body on every route.
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body: Buffer, done) => {
+    (req as any).rawBody = body;
+    try {
+      done(null, body.length ? JSON.parse(body.toString('utf8')) : {});
+    } catch (err) {
+      done(err as Error);
+    }
+  });
+
   await app.register(swagger, {
     openapi: {
       info: {
@@ -59,6 +72,13 @@ async function start() {
   });
 
   await registerRoutes(app);
+
+  // Stripe webhook: must read the raw request body to verify the signature.
+  // The raw bytes are captured by the application/json content-type parser
+  // into req.rawBody; we just forward to the handler.
+  app.post('/api/v1/premium/webhook', (req, reply) => {
+    return handleStripeWebhook(req, reply);
+  });
 
   const io = new SocketIOServer(app.server, {
     cors: {
