@@ -45,6 +45,10 @@ export const SendMessageSchema = z.object({
   type: z.enum(['TEXT', 'IMAGE', 'VOICE', 'VIDEO', 'EMOJI', 'GIF', 'STICKER']).default('TEXT'),
 });
 
+export const CreateConversationSchema = z.object({
+  friendId: z.string().uuid(),
+});
+
 export const CreateReportSchema = z.object({
   reportedUserId: z.string().uuid(),
   category: z.enum(['NUDITY', 'HARASSMENT', 'HATE_SPEECH', 'VIOLENCE', 'FAKE_PROFILE', 'SPAM', 'UNDERAGE', 'OFFENSIVE', 'SCAMS', 'OTHER']),

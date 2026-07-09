@@ -38,7 +38,11 @@ export class AuthService {
   }
 
   constructor(private http: HttpClient, private socketService: SocketService) {
-    this.loadUser();
+    // Defer boot to avoid a DI cycle: AuthService constructs -> loadUser()
+    // -> HttpClient -> HTTP_INTERCEPTORS -> AuthInterceptor -> AuthService
+    // (still constructing). A microtask lets the injector finish building
+    // AuthService before any request triggers the interceptor.
+    queueMicrotask(() => this.loadUser());
   }
 
   private loadUser(): void {
@@ -49,7 +53,14 @@ export class AuthService {
           this.socketService.connect();
           this.loadingSubject.next(false);
         },
-        error: () => {
+        error: (err: any) => {
+          // fetchCurrentUser no longer clears the refresh token, so if we
+          // still have one, the interceptor already attempted (and failed)
+          // to refresh. At this point the session is dead — clean up.
+          if (!localStorage.getItem(this.refreshTokenKey)) {
+            this.clearTokens();
+          }
+          this.currentUser$.next(null);
           this.loadingSubject.next(false);
         }
       });
@@ -159,7 +170,10 @@ export class AuthService {
           localStorage.setItem(this.userIdKey, res.user.id);
         },
         error: () => {
-          this.clearTokens();
+          // Do not clear the refresh token here — the auth interceptor owns
+          // token refresh and will invoke refreshToken() (which needs the
+          // refresh token) before any logout. Only reset the in-memory user.
+          localStorage.removeItem(this.tokenKey);
           this.currentUser$.next(null);
         }
       })

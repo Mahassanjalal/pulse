@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
-import { SendMessageSchema } from '../lib/validators';
+import { SendMessageSchema, CreateConversationSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
 import { NotificationService, isBlocked } from '../lib/notifications';
 
@@ -66,6 +66,77 @@ export default async function chatRoutes(app: FastifyInstance) {
     });
     
     return { conversations };
+  });
+
+  app.post('/conversations', { preHandler: authenticate }, async (req, reply) => {
+    const authUser = getAuthUser(req)!;
+    const userId = authUser.id;
+    const { friendId } = CreateConversationSchema.parse(req.body);
+
+    if (friendId === userId) {
+      return reply.status(400).send({ error: 'Cannot start a conversation with yourself' });
+    }
+
+    if (await isBlocked(userId, friendId)) {
+      return reply.status(403).send({ error: 'Cannot start a conversation with this user' });
+    }
+
+    const areFriends = await prisma.friend.findFirst({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: friendId },
+          { senderId: friendId, receiverId: userId },
+        ],
+      },
+    });
+
+    if (!areFriends) {
+      return reply.status(403).send({ error: 'You must be friends to start a conversation.' });
+    }
+
+    let match = await prisma.match.findFirst({
+      where: {
+        status: 'ENDED',
+        OR: [
+          { user1Id: userId, user2Id: friendId },
+          { user1Id: friendId, user2Id: userId },
+        ],
+      },
+    });
+
+    if (!match) {
+      match = await prisma.match.create({
+        data: {
+          user1Id: userId,
+          user2Id: friendId,
+          status: 'ENDED',
+        },
+      });
+    }
+
+    return { conversationId: match.id };
+  });
+
+  app.delete('/conversations/:matchId', { preHandler: authenticate }, async (req, reply) => {
+    const authUser = getAuthUser(req)!;
+    const userId = authUser.id;
+    const { matchId } = req.params as { matchId: string };
+
+    const match = await prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+      },
+    });
+
+    if (!match) {
+      return reply.status(404).send({ error: 'Conversation not found' });
+    }
+
+    // Deleting the match cascades to its messages (onDelete: Cascade).
+    await prisma.match.delete({ where: { id: matchId } });
+
+    return { success: true };
   });
 
   app.get('/messages/:matchId', { preHandler: authenticate }, async (req) => {
@@ -178,6 +249,16 @@ export default async function chatRoutes(app: FastifyInstance) {
         type: data.type,
       },
     });
+
+    // Real-time delivery to the recipient's socket room (works for both
+    // in-match and friend/REST conversations).
+    try {
+      const io = (req as any).server.io as { to: (room: string) => { emit: (event: string, payload: any) => void } };
+      const full = await prisma.message.findUnique({ where: { id: message.id } });
+      io.to(`user_${receiverId}`).emit('match_message', full);
+    } catch (e) {
+      // socket emit is best-effort; persistence already succeeded
+    }
 
     const sender = await prisma.user.findUnique({
       where: { id: userId },

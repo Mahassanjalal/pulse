@@ -7,13 +7,16 @@
   <div class="flex flex-1 overflow-hidden">
     <!-- Conversations List -->
     <div class="w-full md:w-80 border-r border-white/10 flex flex-col flex-shrink-0">
-      <div class="p-md border-b border-white/10">
-        <div class="relative">
+      <div class="p-md border-b border-white/10 flex items-center gap-sm">
+        <div class="relative flex-1">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-body-md">search</span>
           <input [(ngModel)]="searchQuery" (input)="onSearchChange()"
             class="w-full bg-surface-container/40 border border-white/5 rounded-full py-sm pl-xl pr-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-secondary transition-all"
             placeholder="Search messages..." type="text" aria-label="Search conversations" />
         </div>
+        <button (click)="openFriendPicker()" type="button" class="w-10 h-10 flex-shrink-0 bg-primary rounded-full flex items-center justify-center neon-glow-primary hover:brightness-110 active:scale-95 transition-all" aria-label="New chat">
+          <span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">add</span>
+        </button>
       </div>
 
       <div class="overflow-y-auto flex-1">
@@ -58,11 +61,11 @@
             <p class="font-label text-label-sm text-tertiary">{{ conv.peer.status === 'ONLINE' ? 'Online now' : 'Offline' }}</p>
           </div>
           <div class="ml-auto flex gap-sm">
-            <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all">
-              <span class="material-symbols-outlined text-on-surface-variant hover:text-secondary">videocam</span>
+            <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all" (click)="deleteConversation(activeChat!)">
+              <span class="material-symbols-outlined text-on-surface-variant hover:text-error">delete</span>
             </button>
             <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all">
-              <span class="material-symbols-outlined text-on-surface-variant hover:text-primary">more_vert</span>
+              <span class="material-symbols-outlined text-on-surface-variant hover:text-secondary">videocam</span>
             </button>
           </div>
         </div>
@@ -73,7 +76,7 @@
             <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-md">person_add</span>
             <p class="font-body text-body-lg text-on-surface mb-sm">{{ chatError }}</p>
             <p class="font-body text-body-md text-on-surface-variant mb-lg">Send a friend request to start chatting with this person.</p>
-            <button type="button" class="bg-primary text-on-primary px-xl py-md rounded-xl font-label text-label-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+            <button type="button" (click)="sendFriendRequest()" class="bg-primary text-on-primary px-xl py-md rounded-xl font-label text-label-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
               Send Friend Request
             </button>
           </div>
@@ -105,11 +108,12 @@
 
         <!-- Message Input -->
         <div *ngIf="!chatError" class="p-md border-t border-white/10 flex items-center gap-sm flex-shrink-0">
-          <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all">
+          <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all" (click)="openFriendPicker()" aria-label="New chat">
             <span class="material-symbols-outlined text-on-surface-variant">add_circle</span>
           </button>
           <input
             [(ngModel)]="newMessage"
+            (input)="onTyping()"
             (keyup.enter)="sendMessage()"
             class="flex-1 bg-surface-container/40 border border-white/5 rounded-full py-sm px-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-secondary transition-all"
             placeholder="Type a message..." type="text" />
@@ -128,6 +132,34 @@
           </div>
         </div>
       </ng-container>
+    </div>
+  </div>
+
+  <!-- Friend Picker Modal -->
+  <div *ngIf="showFriendPicker" class="fixed inset-0 z-50 flex items-center justify-center p-lg bg-black/60 backdrop-blur-sm" (click)="closeFriendPicker()">
+    <div class="w-full max-w-md glass-panel rounded-2xl border border-white/10 overflow-hidden" (click)="$event.stopPropagation()">
+      <div class="flex items-center justify-between p-lg border-b border-white/10">
+        <h2 class="font-headline text-headline-md text-on-surface">New Conversation</h2>
+        <button type="button" (click)="closeFriendPicker()" class="p-sm rounded-full hover:bg-white/5 transition-all">
+          <span class="material-symbols-outlined text-on-surface-variant">close</span>
+        </button>
+      </div>
+      <div class="max-h-[60vh] overflow-y-auto p-md space-y-sm">
+        <div *ngFor="let friend of friends"
+          (click)="startConversationWith(friend.peer.id)"
+          class="flex items-center gap-md p-md hover:bg-white/5 rounded-xl transition-all cursor-pointer">
+          <div class="w-11 h-11 rounded-full overflow-hidden border border-white/10 flex-shrink-0">
+            <img class="w-full h-full object-cover" [src]="friend.peer.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="friend.peer.displayName" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-label text-label-md text-on-surface truncate">{{ friend.peer.displayName }}</p>
+            <p class="font-label text-label-sm text-on-surface-variant">{{ friend.peer.status === 'ONLINE' ? 'Online now' : 'Offline' }}</p>
+          </div>
+        </div>
+        <div *ngIf="friends.length === 0" class="text-center py-xl text-on-surface-variant text-sm">
+          No friends yet. Add friends to start chatting.
+        </div>
+      </div>
     </div>
   </div>
 </div>

@@ -319,12 +319,26 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       }
     });
 
-    socket.on('typing', (data: { matchId: string; isTyping: boolean }) => {
-      const match = activeMatches.get(data.matchId);
-      if (!match) return;
+    socket.on('typing', async (data: { matchId: string; isTyping: boolean }) => {
+      let otherUserId: string | undefined;
 
-      const otherUserId = match.user1 === userId ? match.user2 : match.user1;
-      io.to(`user_${otherUserId}`).emit('peer_typing', { isTyping: data.isTyping });
+      const match = activeMatches.get(data.matchId);
+      if (match) {
+        otherUserId = match.user1 === userId ? match.user2 : match.user1;
+      } else {
+        // Fallback for friend/REST conversations (status ENDED) which are not
+        // in the live activeMatches map.
+        const dbMatch = await prisma.match.findFirst({
+          where: { id: data.matchId, OR: [{ user1Id: userId }, { user2Id: userId }] },
+          select: { user1Id: true, user2Id: true },
+        });
+        if (dbMatch) {
+          otherUserId = dbMatch.user1Id === userId ? dbMatch.user2Id : dbMatch.user1Id;
+        }
+      }
+
+      if (!otherUserId) return;
+      io.to(`user_${otherUserId}`).emit('peer_typing', { matchId: data.matchId, isTyping: data.isTyping });
     });
 
     // ======================================

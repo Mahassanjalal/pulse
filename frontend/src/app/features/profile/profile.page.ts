@@ -343,7 +343,10 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
   deleteAccount(): void {
     this.showDeleteConfirm = false;
     this.userService.deleteAccount().subscribe({
-      next: () => this.authService.logout(),
+      next: () => {
+        this.authService.logout();
+        this.router.navigate(['/login']);
+      },
       error: () => this.showToast('Failed to deactivate account')
     });
   }

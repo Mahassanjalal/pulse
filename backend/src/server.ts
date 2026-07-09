@@ -60,6 +60,16 @@ async function start() {
 
   await registerRoutes(app);
 
+  const io = new SocketIOServer(app.server, {
+    cors: {
+      origin: process.env.FRONTEND_URL || 'http://localhost:4200',
+      credentials: true,
+    },
+    transports: ['websocket'],
+  });
+
+  app.decorate('io', io);
+
   app.setErrorHandler((error: any, request, reply) => {
     const statusCode = error.statusCode || 500;
     const correlationId = (request as any).correlationId;
@@ -86,14 +96,6 @@ async function start() {
   });
 
   await app.ready();
-
-  const io = new SocketIOServer(app.server, {
-    cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:4200',
-      credentials: true,
-    },
-    transports: ['websocket'],
-  });
 
   setupSocketHandlers(io, app);
 

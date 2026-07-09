@@ -28,8 +28,6 @@ async function main() {
         ...userData,
         trustScore: 50 + Math.floor(Math.random() * 50),
         coins: 100 + Math.floor(Math.random() * 2000),
-        friendsCount: Math.floor(Math.random() * 50),
-        totalConversations: Math.floor(Math.random() * 200),
       },
     });
     created.push(user);

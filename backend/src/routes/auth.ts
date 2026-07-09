@@ -3,6 +3,7 @@ import argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../lib/prisma';
+import { withRealCounts } from '../lib/user';
 import { RegisterSchema, LoginSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
 
@@ -274,6 +275,9 @@ export default async function authRoutes(app: FastifyInstance) {
     await prisma.user.update({
       where: { id: authUser.id },
       data: { status: 'OFFLINE', lastSeen: new Date() },
+    }).catch(() => {
+      // The user may have already been deleted (e.g. account deletion flow),
+      // in which case updating their status is a no-op.
     });
     
     return { success: true };
@@ -315,7 +319,7 @@ export default async function authRoutes(app: FastifyInstance) {
       },
     });
     
-    return { user };
+    return { user: await withRealCounts(authUser.id, user!) };
   });
 
   // POST /api/v1/auth/guest - Continue as guest

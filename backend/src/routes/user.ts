@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
+import { withRealCounts } from '../lib/user';
 import { UpdateProfileSchema, UpdatePreferencesSchema, UpdatePrivacySettingsSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
 
@@ -40,17 +41,16 @@ export default async function userRoutes(app: FastifyInstance) {
     }
 
     if (user.privacySettings?.privateProfile) {
-      return {
-        user: {
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName,
-          isVerified: user.isVerified,
-          isPremium: user.isPremium,
-          privacySettings: user.privacySettings,
-          isPrivate: true,
-        },
-      };
+      const privateUser = await withRealCounts(id, {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        isVerified: user.isVerified,
+        isPremium: user.isPremium,
+        privacySettings: user.privacySettings,
+        isPrivate: true,
+      });
+      return { user: privateUser, privacySettings: user.privacySettings };
     }
 
     const privacy = user.privacySettings;
@@ -75,7 +75,8 @@ export default async function userRoutes(app: FastifyInstance) {
       } catch {}
     }
 
-    return { user: filtered, privacySettings: user.privacySettings };
+    const userWithCounts = await withRealCounts(id, filtered);
+    return { user: userWithCounts, privacySettings: user.privacySettings };
   });
 
   app.patch('/me/profile', { preHandler: authenticate }, async (req) => {
@@ -239,7 +240,7 @@ export default async function userRoutes(app: FastifyInstance) {
       }),
     ]);
 
-    return { stats: user, onlineCount, trending };
+    return { stats: await withRealCounts(authUser.id, user!), onlineCount, trending };
   });
 
   // POST /me/daily-reward - Claim daily reward

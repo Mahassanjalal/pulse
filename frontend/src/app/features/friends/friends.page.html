@@ -31,7 +31,7 @@
               <p class="font-label text-label-md text-on-surface truncate group-hover:text-primary transition-colors">{{ friend.peer.displayName }}</p>
               <p class="font-label text-label-sm text-on-surface-variant">Online now</p>
             </div>
-            <button type="button" class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" [routerLink]="['/messages']">chat</button>
+            <button type="button" class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" [routerLink]="['/messages']" [queryParams]="{ userId: friend.peer.id }">chat</button>
             <button type="button" class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors" [routerLink]="['/video']">videocam</button>
           </div>
           <div *ngIf="onlineFriends.length === 0" class="text-center py-md text-on-surface-variant text-sm">
