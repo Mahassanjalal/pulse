@@ -10,13 +10,14 @@
       <div class="p-md border-b border-white/10">
         <div class="relative">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-body-md">search</span>
-          <input class="w-full bg-surface-container/40 border border-white/5 rounded-full py-sm pl-xl pr-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-secondary transition-all"
-            placeholder="Search messages..." type="text" />
+          <input [(ngModel)]="searchQuery" (input)="onSearchChange()"
+            class="w-full bg-surface-container/40 border border-white/5 rounded-full py-sm pl-xl pr-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-secondary transition-all"
+            placeholder="Search messages..." type="text" aria-label="Search conversations" />
         </div>
       </div>
 
       <div class="overflow-y-auto flex-1">
-        <div *ngFor="let conv of conversations"
+        <div *ngFor="let conv of filteredConversations"
           (click)="selectConversation(conv.id)"
           class="flex items-center gap-md p-md cursor-pointer transition-all border-b border-white/5"
           [ngClass]="activeChat === conv.id ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-white/5'">
@@ -57,10 +58,10 @@
             <p class="font-label text-label-sm text-tertiary">{{ conv.peer.status === 'ONLINE' ? 'Online now' : 'Offline' }}</p>
           </div>
           <div class="ml-auto flex gap-sm">
-            <button class="p-sm rounded-full hover:bg-white/5 transition-all">
+            <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all">
               <span class="material-symbols-outlined text-on-surface-variant hover:text-secondary">videocam</span>
             </button>
-            <button class="p-sm rounded-full hover:bg-white/5 transition-all">
+            <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all">
               <span class="material-symbols-outlined text-on-surface-variant hover:text-primary">more_vert</span>
             </button>
           </div>
@@ -72,7 +73,7 @@
             <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-md">person_add</span>
             <p class="font-body text-body-lg text-on-surface mb-sm">{{ chatError }}</p>
             <p class="font-body text-body-md text-on-surface-variant mb-lg">Send a friend request to start chatting with this person.</p>
-            <button class="bg-primary text-on-primary px-xl py-md rounded-xl font-label text-label-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+            <button type="button" class="bg-primary text-on-primary px-xl py-md rounded-xl font-label text-label-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
               Send Friend Request
             </button>
           </div>
@@ -93,7 +94,7 @@
             </div>
           </div>
           <!-- Typing indicator -->
-          <div class="flex justify-start" *ngIf="conv.peer.status === 'ONLINE'">
+          <div class="flex justify-start" *ngIf="isPeerTyping">
             <div class="bg-surface-container border border-white/5 px-md py-sm rounded-2xl rounded-bl-sm flex gap-xs items-center">
               <span class="w-1.5 h-1.5 bg-on-surface-variant rounded-full pulse-animation"></span>
               <span class="w-1.5 h-1.5 bg-on-surface-variant rounded-full pulse-animation" style="animation-delay: 0.2s"></span>
@@ -104,7 +105,7 @@
 
         <!-- Message Input -->
         <div *ngIf="!chatError" class="p-md border-t border-white/10 flex items-center gap-sm flex-shrink-0">
-          <button class="p-sm rounded-full hover:bg-white/5 transition-all">
+          <button type="button" class="p-sm rounded-full hover:bg-white/5 transition-all">
             <span class="material-symbols-outlined text-on-surface-variant">add_circle</span>
           </button>
           <input

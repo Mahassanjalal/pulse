@@ -1,19 +1,26 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
-import { FriendService, Friend, FriendRequest } from '../../core/services/friend.service';
+import { FriendService } from '../../core/services/friend.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PremiumModalService } from '../../core/services/premium-modal.service';
+import { Friend, FriendRequestItem } from '@models/user.model';
+import { Subject, debounceTime, distinctUntilChanged, Subscription } from 'rxjs';
 
 @Component({
   selector: 'pulse-friends',
   templateUrl: './friends.page.html',
   styles: []
 })
-export class FriendsPageComponent implements OnInit {
+export class FriendsPageComponent implements OnInit, OnDestroy {
   friends: Friend[] = [];
-  receivedRequests: FriendRequest[] = [];
-  sentRequests: FriendRequest[] = [];
+  receivedRequests: FriendRequestItem[] = [];
+  sentRequests: FriendRequestItem[] = [];
   searchQuery = '';
+  toastMessage: string | null = null;
+  private toastTimeout: any = null;
+  private subscriptions: Subscription[] = [];
+  private searchSubject = new Subject<string>();
+  private allFriends: Friend[] = [];
 
   constructor(
     private friendService: FriendService,
@@ -25,9 +32,39 @@ export class FriendsPageComponent implements OnInit {
   ngOnInit(): void {
     this.friendService.loadFriends();
     this.friendService.loadRequests();
-    this.friendService.friendsObs.subscribe(friends => this.friends = friends);
-    this.friendService.receivedRequestsObs.subscribe(reqs => this.receivedRequests = reqs);
-    this.friendService.sentRequestsObs.subscribe(reqs => this.sentRequests = reqs);
+    this.subscriptions.push(
+      this.friendService.friendsObs.subscribe(friends => {
+        this.friends = friends;
+        this.applySearch();
+      })
+    );
+    this.subscriptions.push(this.friendService.receivedRequestsObs.subscribe(reqs => this.receivedRequests = reqs));
+    this.subscriptions.push(this.friendService.sentRequestsObs.subscribe(reqs => this.sentRequests = reqs));
+    this.subscriptions.push(
+      this.searchSubject.pipe(
+        debounceTime(300),
+        distinctUntilChanged()
+      ).subscribe(() => this.applySearch())
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(s => s.unsubscribe());
+    this.searchSubject.complete();
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+  }
+
+  onSearchChange(): void {
+    this.searchSubject.next(this.searchQuery);
+  }
+
+  private applySearch(): void {
+    if (!this.searchQuery.trim()) {
+      this.allFriends = this.friends;
+    } else {
+      const q = this.searchQuery.toLowerCase();
+      this.allFriends = this.friends.filter(f => f.peer.displayName.toLowerCase().includes(q));
+    }
   }
 
   get onlineFriends(): Friend[] {
@@ -35,26 +72,43 @@ export class FriendsPageComponent implements OnInit {
   }
 
   get filteredFriends(): Friend[] {
-    if (!this.searchQuery) return this.friends;
-    return this.friends.filter(f => f.peer.displayName.toLowerCase().includes(this.searchQuery.toLowerCase()));
+    return this.allFriends;
+  }
+
+  private showToast(msg: string): void {
+    this.toastMessage = msg;
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = setTimeout(() => this.toastMessage = null, 3000);
   }
 
   acceptRequest(requestId: string): void {
-    this.friendService.acceptRequest(requestId).subscribe(() => {
-      this.friendService.loadFriends();
-      this.friendService.loadRequests();
+    this.friendService.acceptRequest(requestId).subscribe({
+      next: () => {
+        this.friendService.loadFriends();
+        this.friendService.loadRequests();
+        this.showToast('Friend request accepted');
+      },
+      error: () => this.showToast('Failed to accept request')
     });
   }
 
   rejectRequest(requestId: string): void {
-    this.friendService.rejectRequest(requestId).subscribe(() => {
-      this.friendService.loadRequests();
+    this.friendService.rejectRequest(requestId).subscribe({
+      next: () => {
+        this.friendService.loadRequests();
+        this.showToast('Request declined');
+      },
+      error: () => this.showToast('Failed to decline request')
     });
   }
 
   removeFriend(friendId: string): void {
-    this.friendService.removeFriend(friendId).subscribe(() => {
-      this.friendService.loadFriends();
+    this.friendService.removeFriend(friendId).subscribe({
+      next: () => {
+        this.friendService.loadFriends();
+        this.showToast('Friend removed');
+      },
+      error: () => this.showToast('Failed to remove friend')
     });
   }
 
@@ -63,8 +117,9 @@ export class FriendsPageComponent implements OnInit {
   }
 
   toggleFavorite(friendId: string): void {
-    this.friendService.toggleFavorite(friendId).subscribe(() => {
-      this.friendService.loadFriends();
+    this.friendService.toggleFavorite(friendId).subscribe({
+      next: () => this.friendService.loadFriends(),
+      error: () => this.showToast('Failed to update favorite')
     });
   }
 }

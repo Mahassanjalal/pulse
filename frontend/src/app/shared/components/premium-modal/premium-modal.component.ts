@@ -1,7 +1,8 @@
 import { Component, EventEmitter, Output, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { PremiumService, Plan } from '../../../core/services/premium.service';
+import { PremiumService } from '../../../core/services/premium.service';
+import { PremiumPlan } from '../../../models/user.model';
 import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
@@ -70,7 +71,7 @@ import { AuthService } from '../../../core/services/auth.service';
 export class PremiumModalComponent implements OnInit {
   @Output() closeModal = new EventEmitter<void>();
 
-  plans: Plan[] = [];
+  plans: PremiumPlan[] = [];
   loading = true;
   error = '';
   subscribing = false;

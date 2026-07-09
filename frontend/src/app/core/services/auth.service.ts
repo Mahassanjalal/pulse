@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, tap } from 'rxjs';
+import { BehaviorSubject, Observable, tap, firstValueFrom } from 'rxjs';
 import { User } from '@models/user.model';
 import { environment } from '@env/environment';
 import { SocketService } from './socket.service';
@@ -59,7 +59,7 @@ export class AuthService {
   }
 
   async login(email: string, password: string): Promise<User> {
-    const res = await this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, { email, password }).toPromise();
+    const res = await firstValueFrom(this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, { email, password }));
     if (res) {
       this.storeTokens(res.token, res.refreshToken, res.user.id!);
       this.currentUser$.next(res.user as User);
@@ -70,7 +70,7 @@ export class AuthService {
   }
 
   async register(data: RegisterData): Promise<User> {
-    const res = await this.http.post<AuthResponse>(`${environment.apiUrl}/auth/register`, data).toPromise();
+    const res = await firstValueFrom(this.http.post<AuthResponse>(`${environment.apiUrl}/auth/register`, data));
     if (res) {
       this.storeTokens(res.token, res.refreshToken, res.user.id!);
       this.currentUser$.next(res.user as User);
@@ -81,7 +81,7 @@ export class AuthService {
   }
 
   async loginWithGoogle(credential: string): Promise<User> {
-    const res = await this.http.post<AuthResponse>(`${environment.apiUrl}/auth/google`, { credential }).toPromise();
+    const res = await firstValueFrom(this.http.post<AuthResponse>(`${environment.apiUrl}/auth/google`, { credential }));
     if (res) {
       this.storeTokens(res.token, res.refreshToken, res.user.id!);
       this.currentUser$.next(res.user as User);
@@ -118,7 +118,7 @@ export class AuthService {
   async logout(): Promise<void> {
     const refreshToken = localStorage.getItem(this.refreshTokenKey);
     try {
-      await this.http.post(`${environment.apiUrl}/auth/logout`, { refreshToken }).toPromise();
+      await firstValueFrom(this.http.post(`${environment.apiUrl}/auth/logout`, { refreshToken }));
     } catch {
       // ignore
     }
@@ -171,7 +171,7 @@ export class AuthService {
     if (!refreshToken) return null;
 
     try {
-      const res = await this.http.post<{ token: string }>(`${environment.apiUrl}/auth/refresh`, { refreshToken }).toPromise();
+      const res = await firstValueFrom(this.http.post<{ token: string }>(`${environment.apiUrl}/auth/refresh`, { refreshToken }));
       if (res) {
         localStorage.setItem(this.tokenKey, res.token);
         return res.token;
@@ -180,6 +180,13 @@ export class AuthService {
       this.clearTokens();
     }
     return null;
+  }
+
+  updateCurrentUser(user: Partial<User>): void {
+    const current = this.currentUser$.value;
+    if (current) {
+      this.currentUser$.next({ ...current, ...user });
+    }
   }
 
   private storeTokens(token: string, refreshToken: string, userId: string): void {
@@ -194,4 +201,3 @@ export class AuthService {
     localStorage.removeItem(this.userIdKey);
   }
 }
-

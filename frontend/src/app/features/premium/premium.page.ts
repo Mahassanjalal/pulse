@@ -2,8 +2,9 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
-import { PremiumService, Plan } from '../../core/services/premium.service';
+import { PremiumService } from '../../core/services/premium.service';
 import { AuthService } from '../../core/services/auth.service';
+import { PremiumPlan } from '@models/user.model';
 
 @Component({
   selector: 'pulse-premium',
@@ -57,7 +58,7 @@ import { AuthService } from '../../core/services/auth.service';
           <ng-template #manageBlock>
             <div class="text-center py-md px-md rounded-xl bg-tertiary/10 border border-tertiary/20">
               <p class="font-label-md text-label-md text-tertiary mb-sm">Subscribed ✓</p>
-              <button (click)="cancelSubscription()" class="text-xs text-on-surface-variant hover:text-error transition-colors">Cancel Subscription</button>
+              <button (click)="openCancelConfirm()" type="button" class="text-xs text-on-surface-variant hover:text-error transition-colors">Cancel Subscription</button>
             </div>
           </ng-template>
         </div>
@@ -75,16 +76,35 @@ import { AuthService } from '../../core/services/auth.service';
           </div>
         </div>
       </div>
+
+      <p *ngIf="cancelError" class="text-center text-error mt-lg">{{ cancelError }}</p>
+    </div>
+
+    <!-- Cancel Confirmation Modal -->
+    <div *ngIf="showCancelConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" (click)="showCancelConfirm = false" role="dialog" aria-modal="true" aria-labelledby="cancel-confirm-title">
+      <div class="glass-panel rounded-2xl border border-white/10 p-xl max-w-md w-full mx-md" (click)="$event.stopPropagation()">
+        <div class="flex items-center justify-between mb-lg">
+          <h3 id="cancel-confirm-title" class="font-headline text-headline-md text-on-surface">Cancel Subscription</h3>
+          <button (click)="showCancelConfirm = false" type="button" class="material-symbols-outlined text-on-surface-variant hover:text-on-surface" aria-label="Close dialog">close</button>
+        </div>
+        <p class="text-on-surface-variant mb-lg">Are you sure you want to cancel your subscription? You will lose access to all premium features at the end of your billing period.</p>
+        <div class="flex gap-md">
+          <button (click)="showCancelConfirm = false" type="button" class="flex-1 py-md glass-panel rounded-xl text-on-surface border border-white/10 hover:bg-white/5 transition-all">Keep Subscription</button>
+          <button (click)="cancelSubscription()" type="button" class="flex-1 py-md bg-error text-on-error rounded-xl font-bold hover:brightness-110 active:scale-95 transition-all">Cancel</button>
+        </div>
+      </div>
     </div>
   `,
   styles: []
 })
 export class PremiumPageComponent implements OnInit {
-  plans: Plan[] = [];
+  plans: PremiumPlan[] = [];
   loading = true;
   error = '';
   subscribing = false;
   isPremium = false;
+  showCancelConfirm = false;
+  cancelError = '';
 
   constructor(
     private premiumService: PremiumService,
@@ -127,17 +147,21 @@ export class PremiumPageComponent implements OnInit {
     });
   }
 
+  openCancelConfirm(): void {
+    this.showCancelConfirm = true;
+    this.cancelError = '';
+  }
+
   cancelSubscription(): void {
-    if (confirm('Are you sure you want to cancel your subscription?')) {
-      this.premiumService.cancel().subscribe({
-        next: () => {
-          this.authService.fetchCurrentUser().subscribe();
-        },
-        error: () => {
-          this.error = 'Failed to cancel subscription.';
-        }
-      });
-    }
+    this.showCancelConfirm = false;
+    this.premiumService.cancel().subscribe({
+      next: () => {
+        this.authService.fetchCurrentUser().subscribe();
+      },
+      error: () => {
+        this.cancelError = 'Failed to cancel subscription.';
+      }
+    });
   }
 
   premiumFeatures = [

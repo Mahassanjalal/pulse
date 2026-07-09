@@ -1,13 +1,19 @@
 <div class="p-lg md:p-xl">
   <div class="font-headline text-headline-lg text-on-surface mb-lg">Friends</div>
+
+  <!-- Toast -->
+  <div *ngIf="toastMessage" class="fixed top-20 right-lg z-50 bg-surface/90 backdrop-blur-md border border-white/10 px-lg py-md rounded-xl shadow-2xl animate-fade-in" role="status" aria-live="polite">
+    <p class="font-label text-label-md text-on-surface">{{ toastMessage }}</p>
+  </div>
+
   <div class="flex flex-col md:flex-row gap-xl">
     <!-- Friends List -->
     <div class="flex-1 glass-panel rounded-2xl border border-white/10">
       <div class="p-lg border-b border-white/10">
         <div class="relative">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-          <input [(ngModel)]="searchQuery" class="w-full bg-surface/40 border border-white/5 rounded-full py-sm pl-xl pr-md text-body-md text-on-surface focus:outline-none focus:border-secondary transition-all"
-            placeholder="Search friends..." type="text" />
+          <input [(ngModel)]="searchQuery" (input)="onSearchChange()" class="w-full bg-surface/40 border border-white/5 rounded-full py-sm pl-xl pr-md text-body-md text-on-surface focus:outline-none focus:border-secondary transition-all"
+            placeholder="Search friends..." type="text" aria-label="Search friends" />
         </div>
       </div>
       <div class="p-lg">
@@ -25,8 +31,8 @@
               <p class="font-label text-label-md text-on-surface truncate group-hover:text-primary transition-colors">{{ friend.peer.displayName }}</p>
               <p class="font-label text-label-sm text-on-surface-variant">Online now</p>
             </div>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" [routerLink]="['/messages']">chat</button>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors" [routerLink]="['/video']">videocam</button>
+            <button type="button" class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" [routerLink]="['/messages']">chat</button>
+            <button type="button" class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors" [routerLink]="['/video']">videocam</button>
           </div>
           <div *ngIf="onlineFriends.length === 0" class="text-center py-md text-on-surface-variant text-sm">
             No friends online right now
@@ -47,10 +53,10 @@
               </div>
             </div>
             <div class="flex items-center gap-xs">
-              <button (click)="toggleFavorite(friend.friendId)" class="p-sm hover:bg-white/5 rounded-full transition-all">
+              <button (click)="toggleFavorite(friend.friendId)" type="button" class="p-sm hover:bg-white/5 rounded-full transition-all">
                 <span class="material-symbols-outlined text-body-md" [class]="friend.isFavorite ? 'text-primary' : 'text-on-surface-variant hover:text-primary'">favorite</span>
               </button>
-              <button (click)="removeFriend(friend.friendId)" class="p-sm hover:bg-white/5 rounded-full transition-all">
+              <button (click)="removeFriend(friend.friendId)" type="button" class="p-sm hover:bg-white/5 rounded-full transition-all">
                 <span class="material-symbols-outlined text-body-md text-on-surface-variant hover:text-error">close</span>
               </button>
             </div>
@@ -74,18 +80,18 @@
             </div>
             <div class="flex gap-xs">
               <ng-container *ngIf="authService.isAuthenticated() && authService.getCurrentUser()?.isPremium; else premiumRequired">
-                <button (click)="acceptRequest(req.id)" class="w-8 h-8 bg-tertiary rounded-full flex items-center justify-center text-white hover:brightness-110 transition-all">
+                <button (click)="acceptRequest(req.id)" type="button" class="w-8 h-8 bg-tertiary rounded-full flex items-center justify-center text-white hover:brightness-110 transition-all">
                   <span class="material-symbols-outlined text-sm">check</span>
                 </button>
-                <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
+                <button (click)="rejectRequest(req.id)" type="button" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
                   <span class="material-symbols-outlined text-sm">close</span>
                 </button>
               </ng-container>
               <ng-template #premiumRequired>
-                <button (click)="openPremiumModal()" class="px-sm py-xs bg-primary/20 text-primary rounded-full font-label text-label-xs hover:brightness-110 transition-all">
+                <button (click)="openPremiumModal()" type="button" class="px-sm py-xs bg-primary/20 text-primary rounded-full font-label text-label-xs hover:brightness-110 transition-all">
                   Premium
                 </button>
-                <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
+                <button (click)="rejectRequest(req.id)" type="button" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all">
                   <span class="material-symbols-outlined text-sm">close</span>
                 </button>
               </ng-template>
@@ -109,7 +115,7 @@
               <p class="font-label text-label-md text-on-surface truncate">{{ req.toUser?.displayName }}</p>
               <p class="font-label text-label-sm text-on-surface-variant">{{ req.toUser?.country || 'Pending' }}</p>
             </div>
-            <button (click)="rejectRequest(req.id)" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-error/20 hover:text-error transition-all">
+            <button (click)="rejectRequest(req.id)" type="button" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-error/20 hover:text-error transition-all">
               <span class="material-symbols-outlined text-sm">close</span>
             </button>
           </div>
@@ -121,9 +127,9 @@
         <p class="font-body text-body-md text-on-surface-variant mb-md">Earn coins when your friends join Pulse!</p>
         <div class="flex items-center gap-sm p-sm bg-surface-container rounded-xl border border-white/5 mb-md">
           <span class="font-label text-label-sm text-on-surface-variant truncate flex-1">pulse.app/join/xyz123</span>
-          <button class="text-primary font-label text-label-sm hover:text-white transition-colors">Copy</button>
+          <button type="button" class="text-primary font-label text-label-sm hover:text-white transition-colors">Copy</button>
         </div>
-        <button class="w-full bg-primary text-on-primary py-md rounded-xl font-label text-label-sm neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+        <button type="button" class="w-full bg-primary text-on-primary py-md rounded-xl font-label text-label-sm neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
           Share Invite Link
         </button>
       </div>

@@ -51,11 +51,13 @@ export interface PrivacySettings {
 
 export interface ChatMessage {
   id: string;
+  matchId?: string;
   senderId: string;
   receiverId: string;
   content: string;
   type: 'text' | 'image' | 'video' | 'voice' | 'emoji' | 'gif' | 'sticker';
   timestamp: Date;
+  createdAt?: string;
   read: boolean;
   deleted: boolean;
   reactions?: MessageReaction[];
@@ -128,6 +130,7 @@ export interface PremiumPlan {
   features: string[];
   discount?: number;
   isMostPopular?: boolean;
+  popular?: boolean;
 }
 
 export interface LeaderboardEntry {
@@ -147,4 +150,122 @@ export interface Report {
   description: string;
   status: 'pending' | 'reviewed' | 'resolved';
   timestamp: Date;
+}
+
+export interface Conversation {
+  id: string;
+  peer: {
+    id: string;
+    displayName: string;
+    profilePicture: string;
+    status: string;
+  };
+  lastMessage: {
+    content: string;
+    createdAt: string;
+  } | null;
+  unreadCount: number;
+}
+
+export interface Friend {
+  friendId: string;
+  peer: {
+    id: string;
+    displayName: string;
+    profilePicture: string;
+    status: string;
+    lastSeen: string;
+  };
+  isFavorite: boolean;
+}
+
+export interface FriendRequestItem {
+  id: string;
+  fromUser?: { id: string; displayName: string; profilePicture: string; country: string };
+  toUser?: { id: string; displayName: string; profilePicture: string; country: string };
+  status: string;
+  createdAt: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  unread: boolean;
+  timestamp: Date;
+  data?: any;
+}
+
+export interface SubscriptionInfo {
+  id: string;
+  planType: string;
+  price: number;
+  period: string;
+  features: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
+export interface DashboardStats {
+  coins: number;
+  dailyStreak: number;
+  friendsCount: number;
+  totalConversations: number;
+  trustScore: number;
+  isPremium: boolean;
+  displayName: string;
+  profilePicture: string;
+  achievements: any[];
+}
+
+export interface TrendingUser {
+  id: string;
+  displayName: string;
+  profilePicture: string;
+  interests: any;
+  isVerified: boolean;
+  isPremium: boolean;
+  country: string;
+  status: string;
+}
+
+export interface DiscoverUser {
+  id: string;
+  displayName: string;
+  profilePicture: string;
+  country: string;
+  interests: string;
+  languages: string;
+  age: number;
+  isVerified: boolean;
+  isPremium: boolean;
+  status: string;
+  trustScore: number;
+}
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  age?: number;
+  gender?: string;
+  bio?: string;
+  country?: string;
+  languages: string;
+  interests: string;
+  profilePicture?: string;
+  coverImage?: string;
+  isVerified: boolean;
+  isPremium: boolean;
+  status: string;
+  trustScore: number;
+  verificationLevel: number;
+  communityRating: number;
+  friendsCount: number;
+  totalConversations: number;
+  createdAt: string;
+  privacySettings?: any;
+  isPrivate?: boolean;
 }

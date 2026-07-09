@@ -176,12 +176,12 @@ import { SharedModule } from '@shared/shared.module';
             </ul>
           </div>
         </div>
-        <div class="max-w-6xl mx-auto mt-xl pt-lg border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-md">
-          <p class="font-label-sm text-label-sm text-on-surface-variant">&copy; 2025 Pulse Discovery Inc. All rights reserved.</p>
+          <div class="max-w-6xl mx-auto mt-xl pt-lg border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-md">
+          <p class="font-label-sm text-label-sm text-on-surface-variant">&copy; 2026 Pulse Discovery Inc. All rights reserved.</p>
           <div class="flex gap-md">
-            <span class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all cursor-pointer"><span class="material-symbols-outlined text-md">public</span></span>
-            <span class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all cursor-pointer"><span class="material-symbols-outlined text-md">alternate_email</span></span>
-            <span class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all cursor-pointer"><span class="material-symbols-outlined text-md">share</span></span>
+            <a href="https://pulse.app" target="_blank" rel="noopener noreferrer" class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all" aria-label="Visit our website"><span class="material-symbols-outlined text-md">public</span></a>
+            <a href="mailto:hello@pulse.app" class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all" aria-label="Email us"><span class="material-symbols-outlined text-md">alternate_email</span></a>
+            <button (click)="shareAbout()" type="button" class="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:text-primary transition-all" aria-label="Share this page"><span class="material-symbols-outlined text-md">share</span></button>
           </div>
         </div>
       </footer>
@@ -196,4 +196,12 @@ export class AboutPageComponent {
     { name: 'Sasha Roe', role: 'PRODUCT VISION', color: 'text-tertiary', avatar: 'https://i.pravatar.cc/300?img=45' },
     { name: 'Dr. Aris Thorne', role: 'VP OF SAFETY', color: 'text-error', avatar: 'https://i.pravatar.cc/300?img=22' }
   ];
+
+  shareAbout(): void {
+    if (navigator.share) {
+      navigator.share({ title: 'Pulse - About Us', url: window.location.href });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+    }
+  }
 }

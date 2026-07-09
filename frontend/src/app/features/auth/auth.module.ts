@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms';
 import { SharedModule } from '@shared/shared.module';
 import { AuthPageComponent } from './auth.page';
 
@@ -10,7 +10,7 @@ import { AuthPageComponent } from './auth.page';
   imports: [
     CommonModule,
     RouterModule.forChild([{ path: '', component: AuthPageComponent }]),
-    FormsModule,
+    ReactiveFormsModule,
     SharedModule
   ]
 })

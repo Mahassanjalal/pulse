@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { Subscription } from 'rxjs';
@@ -6,8 +6,8 @@ import { AuthService } from '../../core/services/auth.service';
 import { FriendService } from '../../core/services/friend.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PremiumModalService } from '../../core/services/premium-modal.service';
+import { UserService } from '../../core/services/user.service';
 import { environment } from '@env/environment';
-import { tap } from 'rxjs/operators';
 
 interface UserProfile {
   id: string;
@@ -51,6 +51,9 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
   isLoading = true;
   liveStatus = 'OFFLINE';
   private presenceSub: Subscription | null = null;
+  hasUnsavedChanges = false;
+  toastMessage: string | null = null;
+  private toastTimeout: any = null;
 
   showReportDialog = false;
   reportCategory = 'OTHER';
@@ -61,6 +64,8 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
   editValue: string = '';
   newInterest: string = '';
 
+  showDeleteConfirm = false;
+
   constructor(
     private route: ActivatedRoute,
     private http: HttpClient,
@@ -68,8 +73,17 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
     private friendService: FriendService,
     private presenceService: PresenceService,
     private premiumModalService: PremiumModalService,
-    private router: Router
+    private router: Router,
+    private userService: UserService
   ) {}
+
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
 
   ngOnInit(): void {
     this.route.params.subscribe(params => {
@@ -85,6 +99,13 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.presenceSub?.unsubscribe();
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+  }
+
+  private showToast(msg: string): void {
+    this.toastMessage = msg;
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = setTimeout(() => this.toastMessage = null, 3000);
   }
 
   private watchPresence(userId: string): void {
@@ -99,7 +120,7 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
     const currentUser = this.authService.getCurrentUser();
     if (currentUser) {
       this.isOwnProfile = true;
-      this.http.get<{ user: UserProfile }>(`${environment.apiUrl}/users/${currentUser.id}`).subscribe({
+      this.userService.getUser(currentUser.id).subscribe({
         next: (res) => {
           this.user = res.user;
           this.liveStatus = res.user.status;
@@ -108,7 +129,10 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
           this.loadProfileVisitors();
           this.watchPresence(currentUser.id);
         },
-        error: () => this.isLoading = false
+        error: () => {
+          this.isLoading = false;
+          this.showToast('Failed to load profile');
+        }
       });
     } else {
       this.isLoading = false;
@@ -120,7 +144,7 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
     if (!currentUser) return;
     this.isOwnProfile = currentUser.id === userId;
 
-    this.http.get<{ user: UserProfile }>(`${environment.apiUrl}/users/${userId}`).subscribe({
+    this.userService.getUser(userId).subscribe({
       next: (res) => {
         this.user = res.user;
         this.liveStatus = res.user.status;
@@ -129,31 +153,36 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
         this.loadRelationshipStatus(userId);
         this.watchPresence(userId);
       },
-      error: () => this.isLoading = false
+      error: () => {
+        this.isLoading = false;
+        this.showToast('Failed to load profile');
+      }
     });
 
     if (!this.isOwnProfile && currentUser) {
-      this.http.get<{ mutualFriends: any[]; count: number }>(`${environment.apiUrl}/users/${userId}/mutual-friends`).subscribe({
+      this.userService.getMutualFriends(userId).subscribe({
         next: (res) => {
           this.mutualFriends = res.mutualFriends;
           this.mutualFriendsCount = res.count;
-        }
+        },
+        error: () => {}
       });
     }
   }
 
   private loadRelationshipStatus(userId: string): void {
-    this.http.get<{ relationship: string; friendId: string | null }>(`${environment.apiUrl}/users/${userId}/status`).subscribe({
+    this.userService.getRelationshipStatus(userId).subscribe({
       next: (res) => {
         this.relationship = res.relationship;
         this.friendId = res.friendId;
-      }
+      },
+      error: () => {}
     });
   }
 
   private loadProfileVisitors(): void {
     if (!this.isOwnProfile) return;
-    this.http.get<{ visitors: any[] }>(`${environment.apiUrl}/users/me/visitors`).subscribe({
+    this.userService.getProfileVisitors().subscribe({
       next: (res) => this.profileVisitors = res.visitors,
       error: () => {}
     });
@@ -177,22 +206,28 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
   startEdit(field: string, currentValue: string): void {
     this.editingField = field;
     this.editValue = currentValue || '';
+    this.hasUnsavedChanges = true;
   }
 
   cancelEdit(): void {
     this.editingField = null;
     this.editValue = '';
+    this.hasUnsavedChanges = false;
   }
 
   saveField(field: string): void {
     const update: any = {};
     update[field] = this.editValue;
-    this.http.patch(`${environment.apiUrl}/users/me/profile`, update).subscribe({
+    this.userService.updateProfile(update).subscribe({
       next: () => {
         if (this.user) (this.user as any)[field] = this.editValue;
         this.editingField = null;
+        this.hasUnsavedChanges = false;
+        this.showToast('Profile updated');
       },
-      error: () => {}
+      error: () => {
+        this.showToast('Failed to save changes');
+      }
     });
   }
 
@@ -201,16 +236,24 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
     if (!tag || this.interests.includes(tag)) return;
     this.interests.push(tag);
     this.newInterest = '';
+    this.hasUnsavedChanges = true;
     this.saveInterests();
   }
 
   removeInterest(interest: string): void {
     this.interests = this.interests.filter(i => i !== interest);
+    this.hasUnsavedChanges = true;
     this.saveInterests();
   }
 
   private saveInterests(): void {
-    this.http.patch(`${environment.apiUrl}/users/me/profile`, { interests: JSON.stringify(this.interests) }).subscribe();
+    this.userService.updateProfile({ interests: JSON.stringify(this.interests) }).subscribe({
+      next: () => {
+        this.hasUnsavedChanges = false;
+        this.showToast('Interests updated');
+      },
+      error: () => this.showToast('Failed to update interests')
+    });
   }
 
   sendFriendRequest(): void {
@@ -219,10 +262,13 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
       next: () => {
         this.relationship = 'REQUEST_SENT';
         this.friendService.loadRequests();
+        this.showToast('Friend request sent');
       },
       error: (err) => {
         if (err.error?.error?.includes('premium')) {
           this.premiumModalService.open();
+        } else {
+          this.showToast('Failed to send friend request');
         }
       }
     });
@@ -235,7 +281,9 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
         this.relationship = 'NONE';
         this.friendId = null;
         this.friendService.loadFriends();
-      }
+        this.showToast('Friend removed');
+      },
+      error: () => this.showToast('Failed to remove friend')
     });
   }
 
@@ -246,23 +294,27 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
 
   blockUser(): void {
     if (!this.user) return;
-    this.http.post(`${environment.apiUrl}/users/block`, { userId: this.user.id }).subscribe({
+    this.userService.blockUser(this.user.id).subscribe({
       next: () => {
         this.relationship = 'BLOCKED';
+        this.showToast('User blocked');
       },
       error: (err) => {
         if (err.status === 409) this.relationship = 'BLOCKED';
+        else this.showToast('Failed to block user');
       }
     });
   }
 
   unblockUser(): void {
     if (!this.user) return;
-    this.http.delete(`${environment.apiUrl}/users/block/${this.user.id}`).subscribe({
+    this.userService.unblockUser(this.user.id).subscribe({
       next: () => {
         this.relationship = 'NONE';
         this.loadRelationshipStatus(this.user!.id);
-      }
+        this.showToast('User unblocked');
+      },
+      error: () => this.showToast('Failed to unblock user')
     });
   }
 
@@ -275,16 +327,24 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
 
   submitReport(): void {
     if (!this.user || this.reportDescription.length < 10) return;
-    this.http.post(`${environment.apiUrl}/reports`, {
-      reportedUserId: this.user.id,
-      category: this.reportCategory,
-      description: this.reportDescription,
-    }).subscribe({
+    this.userService.createReport(this.user.id, this.reportCategory, this.reportDescription).subscribe({
       next: () => {
         this.reportSubmitted = true;
         setTimeout(() => this.showReportDialog = false, 2000);
       },
-      error: () => {}
+      error: () => this.showToast('Failed to submit report')
+    });
+  }
+
+  openDeleteConfirm(): void {
+    this.showDeleteConfirm = true;
+  }
+
+  deleteAccount(): void {
+    this.showDeleteConfirm = false;
+    this.userService.deleteAccount().subscribe({
+      next: () => this.authService.logout(),
+      error: () => this.showToast('Failed to deactivate account')
     });
   }
 }

@@ -3,16 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '@env/environment';
 import { SocketService } from './socket.service';
-
-export interface NotificationItem {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  unread: boolean;
-  timestamp: Date;
-  data?: any;
-}
+import { NotificationItem } from '@models/user.model';
 
 @Injectable({
   providedIn: 'root'
@@ -81,7 +72,7 @@ export class NotificationService {
   addNotification(notification: NotificationItem): void {
     const current = this.notifications.value;
     this.notifications.next([notification, ...current]);
-    if (!notification.unread) {
+    if (notification.unread) {
       this.unreadCount.next(this.unreadCount.value + 1);
     }
   }

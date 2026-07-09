@@ -1,98 +1,103 @@
-<div *ngIf="isLoading" class="flex items-center justify-center h-96">
-  <span class="material-symbols-outlined text-4xl text-primary pulse-animation">sync</span>
+<div *ngIf="isLoading" class="flex items-center justify-center h-96" role="status" aria-label="Loading profile">
+  <span class="material-symbols-outlined text-4xl text-primary pulse-animation" aria-hidden="true">sync</span>
+  <span class="sr-only">Loading profile...</span>
+</div>
+
+<!-- Toast -->
+<div *ngIf="toastMessage" class="fixed top-20 right-lg z-50 bg-surface/90 backdrop-blur-md border border-white/10 px-lg py-md rounded-xl shadow-2xl animate-fade-in" role="status" aria-live="polite">
+  <p class="font-label text-label-md text-on-surface">{{ toastMessage }}</p>
 </div>
 
 <div *ngIf="!isLoading">
   <!-- Hero Section -->
   <section class="relative h-96 w-full overflow-hidden">
-    <div class="absolute inset-0 bg-cover bg-center" [style.background-image]="user?.coverImage ? 'url(' + user?.coverImage + ')' : 'url(https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&q=80)'">
+    <div class="absolute inset-0 bg-cover bg-center" [style.background-image]="user?.coverImage ? 'url(' + user?.coverImage + ')' : 'url(https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&q=80)'" aria-hidden="true">
     </div>
-    <div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent"></div>
+    <div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent" aria-hidden="true"></div>
     <div class="absolute bottom-0 left-0 w-full px-xl pb-lg flex flex-col md:flex-row items-end gap-lg">
       <div class="relative group">
         <div class="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-surface overflow-hidden shadow-2xl relative z-10">
-          <img class="w-full h-full object-cover" [src]="user?.profilePicture || 'https://i.pravatar.cc/200?img=7'" alt="Profile" />
+          <img class="w-full h-full object-cover" [src]="user?.profilePicture || 'https://i.pravatar.cc/200?img=7'" [alt]="user?.displayName + ' profile picture'" />
         </div>
-        <div *ngIf="user?.isVerified" class="absolute bottom-1 right-1 z-20 bg-tertiary w-8 h-8 rounded-full flex items-center justify-center border-2 border-surface">
-          <span class="material-symbols-outlined text-on-tertiary text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+        <div *ngIf="user?.isVerified" class="absolute bottom-1 right-1 z-20 bg-tertiary w-8 h-8 rounded-full flex items-center justify-center border-2 border-surface" aria-label="Verified user">
+          <span class="material-symbols-outlined text-on-tertiary text-sm" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">verified</span>
         </div>
         <div class="absolute bottom-1 left-1 z-20 flex items-center gap-1 bg-surface/80 backdrop-blur-sm px-sm py-0.5 rounded-full border border-white/10 text-[10px]">
-          <span class="w-2 h-2 rounded-full" [ngClass]="liveStatus === 'ONLINE' ? 'bg-tertiary pulse-animation' : 'bg-on-surface-variant'"></span>
+          <span class="w-2 h-2 rounded-full" [ngClass]="liveStatus === 'ONLINE' ? 'bg-tertiary pulse-animation' : 'bg-on-surface-variant'" [attr.aria-label]="liveStatus === 'ONLINE' ? 'Online' : 'Offline'"></span>
           <span class="font-bold uppercase tracking-wider" [ngClass]="liveStatus === 'ONLINE' ? 'text-tertiary' : 'text-on-surface-variant'">{{ liveStatus === 'ONLINE' ? 'Online' : 'Offline' }}</span>
         </div>
-        <button *ngIf="isOwnProfile" (click)="startEdit('profilePicture', user?.profilePicture || '')" class="absolute top-1 right-1 z-20 bg-surface/80 w-8 h-8 rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-          <span class="material-symbols-outlined text-on-surface text-sm">photo_camera</span>
+        <button *ngIf="isOwnProfile" (click)="startEdit('profilePicture', user?.profilePicture || '')" type="button" class="absolute top-1 right-1 z-20 bg-surface/80 w-8 h-8 rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" aria-label="Change profile picture">
+          <span class="material-symbols-outlined text-on-surface text-sm" aria-hidden="true">photo_camera</span>
         </button>
       </div>
       <div class="flex-1 pb-md">
         <div class="flex flex-wrap items-center gap-sm mb-xs">
           <div *ngIf="editingField === 'displayName'; else displayNameBlock">
-            <input [(ngModel)]="editValue" (keyup.enter)="saveField('displayName')" (blur)="saveField('displayName')" class="bg-surface-container border border-white/10 rounded-lg px-md py-sm text-headline-lg text-on-surface font-headline focus:outline-none focus:border-primary" />
+            <input [(ngModel)]="editValue" (keyup.enter)="saveField('displayName')" (blur)="saveField('displayName')" maxlength="50" class="bg-surface-container border border-white/10 rounded-lg px-md py-sm text-headline-lg text-on-surface font-headline focus:outline-none focus:border-primary" aria-label="Edit display name" />
+            <p class="text-label-sm text-on-surface-variant mt-xs">{{ editValue.length }}/50</p>
           </div>
           <ng-template #displayNameBlock>
             <h2 class="font-headline text-headline-lg text-on-surface tracking-tight">{{ user?.displayName || 'Loading...' }}</h2>
-            <button *ngIf="isOwnProfile" (click)="startEdit('displayName', user?.displayName || '')" class="material-symbols-outlined text-on-surface-variant hover:text-primary text-body-md">edit</button>
+            <button *ngIf="isOwnProfile" (click)="startEdit('displayName', user?.displayName || '')" type="button" class="material-symbols-outlined text-on-surface-variant hover:text-primary text-body-md" aria-label="Edit display name">edit</button>
           </ng-template>
           <span *ngIf="user?.isVerified" class="bg-secondary-fixed text-on-secondary-fixed px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Verified</span>
           <span *ngIf="user?.isPremium" class="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black px-sm py-1 rounded text-[10px] font-black uppercase tracking-tighter">Premium</span>
         </div>
         <p class="text-on-surface-variant font-body text-body-lg flex items-center gap-xs">
-          <span class="material-symbols-outlined text-primary text-base">location_on</span>
+          <span class="material-symbols-outlined text-primary text-base" aria-hidden="true">location_on</span>
           {{ user?.country || 'Unknown' }} · {{ user?.age || '--' }} years old · {{ user?.gender || 'N/A' }}
         </p>
       </div>
 
       <!-- Action Buttons for other users -->
-      <div class="flex gap-md mb-md flex-wrap" *ngIf="!isOwnProfile && user">
-        <!-- Add Friend / Friend Request Sent / Friends -->
+      <div class="flex gap-md mb-md flex-wrap" *ngIf="!isOwnProfile && user" role="group" aria-label="Profile actions">
         <ng-container [ngSwitch]="relationship">
-          <button *ngSwitchCase="'NONE'" (click)="sendFriendRequest()"
-            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
-            <span class="material-symbols-outlined">person_add</span>
+          <button *ngSwitchCase="'NONE'" (click)="sendFriendRequest()" type="button"
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10" aria-label="Send friend request">
+            <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
             Add Friend
           </button>
-          <button *ngSwitchCase="'REQUEST_SENT'" disabled
-            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface-variant border border-white/10 opacity-60 cursor-not-allowed">
-            <span class="material-symbols-outlined">pending</span>
+          <button *ngSwitchCase="'REQUEST_SENT'" disabled type="button"
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface-variant border border-white/10 opacity-60 cursor-not-allowed" aria-label="Friend request sent">
+            <span class="material-symbols-outlined" aria-hidden="true">pending</span>
             Request Sent
           </button>
-          <button *ngSwitchCase="'REQUEST_RECEIVED'" (click)="sendFriendRequest()"
-            class="bg-tertiary text-on-tertiary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold active:scale-95 transition-all">
-            <span class="material-symbols-outlined">person_add</span>
+          <button *ngSwitchCase="'REQUEST_RECEIVED'" (click)="sendFriendRequest()" type="button"
+            class="bg-tertiary text-on-tertiary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold active:scale-95 transition-all" aria-label="Accept friend request">
+            <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
             Accept Request
           </button>
           <ng-container *ngSwitchCase="'FRIENDS'">
-            <button (click)="startChat()"
-              class="bg-primary text-on-primary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold neon-glow-primary active:scale-95 transition-all">
-              <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">chat</span>
+            <button (click)="startChat()" type="button"
+              class="bg-primary text-on-primary px-lg py-md rounded-xl flex items-center gap-sm font-body font-bold neon-glow-primary active:scale-95 transition-all" aria-label="Send message">
+              <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">chat</span>
               Message
             </button>
-            <button (click)="unfriend()"
-              class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
-              <span class="material-symbols-outlined">person_remove</span>
+            <button (click)="unfriend()" type="button"
+              class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10" aria-label="Remove friend">
+              <span class="material-symbols-outlined" aria-hidden="true">person_remove</span>
               Unfriend
             </button>
           </ng-container>
-          <span *ngSwitchCase="'BLOCKED'" class="text-on-surface-variant text-body-md flex items-center gap-xs">
-            <span class="material-symbols-outlined">block</span> Blocked
+          <span *ngSwitchCase="'BLOCKED'" class="text-on-surface-variant text-body-md flex items-center gap-xs" aria-label="User is blocked">
+            <span class="material-symbols-outlined" aria-hidden="true">block</span> Blocked
           </span>
         </ng-container>
 
-        <!-- Report & Block actions -->
-        <button (click)="openReportDialog()"
-          class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
-          <span class="material-symbols-outlined">flag</span>
+        <button (click)="openReportDialog()" type="button"
+          class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10" aria-label="Report user">
+          <span class="material-symbols-outlined" aria-hidden="true">flag</span>
           Report
         </button>
         <ng-container [ngSwitch]="relationship">
-          <button *ngSwitchDefault (click)="blockUser()"
-            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-error hover:bg-error/10 active:scale-95 transition-all border border-white/10">
-            <span class="material-symbols-outlined">block</span>
+          <button *ngSwitchDefault (click)="blockUser()" type="button"
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-error hover:bg-error/10 active:scale-95 transition-all border border-white/10" aria-label="Block user">
+            <span class="material-symbols-outlined" aria-hidden="true">block</span>
             Block
           </button>
-          <button *ngSwitchCase="'BLOCKED'" (click)="unblockUser()"
-            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10">
-            <span class="material-symbols-outlined">check</span>
+          <button *ngSwitchCase="'BLOCKED'" (click)="unblockUser()" type="button"
+            class="glass-panel px-lg py-md rounded-xl flex items-center gap-sm font-body text-on-surface hover:bg-white/10 active:scale-95 transition-all border border-white/10" aria-label="Unblock user">
+            <span class="material-symbols-outlined" aria-hidden="true">check</span>
             Unblock
           </button>
         </ng-container>
@@ -108,10 +113,10 @@
       <div class="glass-panel p-lg rounded-2xl border border-white/10">
         <div class="flex items-center justify-between mb-md">
           <h3 class="font-headline text-headline-md text-primary">About</h3>
-          <button *ngIf="isOwnProfile && editingField !== 'bio'" (click)="startEdit('bio', user?.bio || '')" class="material-symbols-outlined text-on-surface-variant hover:text-primary text-body-md">edit</button>
+          <button *ngIf="isOwnProfile && editingField !== 'bio'" (click)="startEdit('bio', user?.bio || '')" type="button" class="material-symbols-outlined text-on-surface-variant hover:text-primary text-body-md" aria-label="Edit bio">edit</button>
         </div>
         <ng-container *ngIf="editingField === 'bio'; else bioDisplay">
-          <textarea [(ngModel)]="editValue" (keyup.enter)="saveField('bio')" (blur)="saveField('bio')" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-lg text-on-surface focus:outline-none focus:border-primary" rows="3" maxlength="500"></textarea>
+          <textarea [(ngModel)]="editValue" (keyup.enter)="saveField('bio')" (blur)="saveField('bio')" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-lg text-on-surface focus:outline-none focus:border-primary" rows="3" maxlength="500" aria-label="Edit bio"></textarea>
           <p class="text-label-sm text-on-surface-variant mt-xs">{{ editValue.length }}/500</p>
         </ng-container>
         <ng-template #bioDisplay>
@@ -122,36 +127,36 @@
         <div class="mt-lg">
           <div class="flex items-center justify-between mb-sm">
             <h4 class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest">Interests</h4>
-            <button *ngIf="isOwnProfile" (click)="startEdit('interests', '')" class="text-primary text-label-sm hover:underline">Edit</button>
+            <button *ngIf="isOwnProfile" (click)="startEdit('interests', '')" type="button" class="text-primary text-label-sm hover:underline" aria-label="Edit interests">Edit</button>
           </div>
-          <div class="flex flex-wrap gap-sm">
+          <div class="flex flex-wrap gap-sm" role="list" aria-label="Interests">
             <ng-container *ngFor="let interest of interests">
-              <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant flex items-center gap-xs">
+              <span class="bg-surface-container-highest px-md py-sm rounded-full text-label-md border border-white/10 text-on-surface-variant flex items-center gap-xs" role="listitem">
                 #{{ interest }}
-                <span *ngIf="isOwnProfile" (click)="removeInterest(interest)" class="material-symbols-outlined text-sm cursor-pointer hover:text-error" style="font-size: 14px;">close</span>
+                <span *ngIf="isOwnProfile" (click)="removeInterest(interest)" class="material-symbols-outlined text-sm cursor-pointer hover:text-error" style="font-size: 14px;" role="button" [attr.aria-label]="'Remove interest ' + interest" tabindex="0">close</span>
               </span>
             </ng-container>
             <div *ngIf="isOwnProfile" class="flex items-center gap-xs">
-              <input [(ngModel)]="newInterest" (keyup.enter)="addInterest()" placeholder="+ Add" class="bg-surface-container-low px-md py-sm rounded-full text-label-md border border-dashed border-white/20 text-on-surface-variant/50 focus:outline-none focus:border-primary focus:text-on-surface transition-colors w-24" />
+              <input [(ngModel)]="newInterest" (keyup.enter)="addInterest()" placeholder="+ Add" class="bg-surface-container-low px-md py-sm rounded-full text-label-md border border-dashed border-white/20 text-on-surface-variant/50 focus:outline-none focus:border-primary focus:text-on-surface transition-colors w-24" aria-label="Add new interest" />
             </div>
           </div>
         </div>
       </div>
 
       <!-- Social Stats -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-lg" role="group" aria-label="Profile statistics">
         <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-primary/40 transition-colors">
-          <span class="material-symbols-outlined text-primary text-4xl mb-sm group-hover:scale-110 transition-transform">forum</span>
+          <span class="material-symbols-outlined text-primary text-4xl mb-sm group-hover:scale-110 transition-transform" aria-hidden="true">forum</span>
           <span class="font-headline text-headline-md text-on-surface">{{ user?.totalConversations || 0 }}</span>
           <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Conversations</span>
         </div>
         <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-secondary-fixed/40 transition-colors">
-          <span class="material-symbols-outlined text-secondary-fixed text-4xl mb-sm group-hover:scale-110 transition-transform">group_add</span>
+          <span class="material-symbols-outlined text-secondary-fixed text-4xl mb-sm group-hover:scale-110 transition-transform" aria-hidden="true">group_add</span>
           <span class="font-headline text-headline-md text-on-surface">{{ user?.friendsCount || 0 }}</span>
           <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Friends</span>
         </div>
         <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center group hover:border-tertiary/40 transition-colors">
-          <span class="material-symbols-outlined text-tertiary text-4xl mb-sm group-hover:scale-110 transition-transform">calendar_month</span>
+          <span class="material-symbols-outlined text-tertiary text-4xl mb-sm group-hover:scale-110 transition-transform" aria-hidden="true">calendar_month</span>
           <span class="font-headline text-headline-md text-on-surface">{{ joinedDate }}</span>
           <span class="text-on-surface-variant text-label-sm uppercase tracking-widest">Joined Pulse</span>
         </div>
@@ -163,8 +168,8 @@
       <!-- Trust Score Gauge -->
       <div class="glass-panel p-lg rounded-2xl border border-white/10 flex flex-col items-center text-center">
         <h3 class="font-headline text-headline-md text-primary mb-lg w-full text-left">Trust Score</h3>
-        <div class="relative w-40 h-40 flex items-center justify-center mb-md">
-          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+        <div class="relative w-40 h-40 flex items-center justify-center mb-md" role="img" [attr.aria-label]="'Trust score: ' + (user?.trustScore || 0) + ' out of 100'">
+          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
             <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
             <circle cx="50" cy="50" r="40" fill="none" stroke="#2ae500" stroke-width="8"
               [attr.stroke-dasharray]="251.2"
@@ -186,7 +191,7 @@
           <div *ngFor="let friend of mutualFriends.slice(0, 3)" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
             <img class="w-full h-full object-cover" [src]="friend.profilePicture || 'https://i.pravatar.cc/60?img=1'" [alt]="friend.displayName" />
           </div>
-          <div *ngIf="mutualFriendsCount > 3" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center">
+          <div *ngIf="mutualFriendsCount > 3" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center" [attr.aria-label]="(mutualFriendsCount - 3) + ' more mutual friends'">
             <span class="font-label text-label-sm text-on-surface-variant">+{{ mutualFriendsCount - 3 }}</span>
           </div>
         </div>
@@ -201,7 +206,7 @@
           <div *ngFor="let visitor of profileVisitors.slice(0, 5)" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
             <img class="w-full h-full object-cover" [src]="visitor.profilePicture || 'https://i.pravatar.cc/60?img=1'" [alt]="visitor.displayName" />
           </div>
-          <div *ngIf="profileVisitors.length > 5" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center">
+          <div *ngIf="profileVisitors.length > 5" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center" [attr.aria-label]="(profileVisitors.length - 5) + ' more visitors'">
             <span class="font-label text-label-sm text-on-surface-variant">+{{ profileVisitors.length - 5 }}</span>
           </div>
         </div>
@@ -211,7 +216,7 @@
       <div *ngIf="isOwnProfile" class="glass-panel p-lg rounded-2xl border border-error/20">
         <h3 class="font-headline text-headline-md text-error mb-xs">Danger Zone</h3>
         <p class="text-on-surface-variant text-body-md mb-md">Permanently delete your account and all data.</p>
-        <button class="w-full bg-error/10 text-error px-lg py-md rounded-xl font-body font-bold border border-error/30 hover:bg-error/20 active:scale-95 transition-all">
+        <button (click)="openDeleteConfirm()" type="button" class="w-full bg-error/10 text-error px-lg py-md rounded-xl font-body font-bold border border-error/30 hover:bg-error/20 active:scale-95 transition-all" aria-label="Delete account">
           Delete Account
         </button>
       </div>
@@ -220,16 +225,16 @@
 </div>
 
 <!-- Report User Dialog -->
-<div *ngIf="showReportDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" (click)="showReportDialog = false">
+<div *ngIf="showReportDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" (click)="showReportDialog = false" role="dialog" aria-modal="true" aria-labelledby="report-dialog-title">
   <div class="glass-panel rounded-2xl border border-white/10 p-xl max-w-md w-full mx-md" (click)="$event.stopPropagation()">
     <ng-container *ngIf="!reportSubmitted; else reportSuccess">
       <div class="flex items-center justify-between mb-lg">
-        <h3 class="font-headline text-headline-md text-on-surface">Report User</h3>
-        <button (click)="showReportDialog = false" class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">close</button>
+        <h3 id="report-dialog-title" class="font-headline text-headline-md text-on-surface">Report User</h3>
+        <button (click)="showReportDialog = false" type="button" class="material-symbols-outlined text-on-surface-variant hover:text-on-surface" aria-label="Close report dialog">close</button>
       </div>
       <div class="mb-md">
-        <label class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-sm block">Category</label>
-        <select [(ngModel)]="reportCategory" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-md text-on-surface focus:outline-none focus:border-primary">
+        <label for="report-category" class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-sm block">Category</label>
+        <select id="report-category" [(ngModel)]="reportCategory" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-md text-on-surface focus:outline-none focus:border-primary">
           <option value="NUDITY">Nudity</option>
           <option value="HARASSMENT">Harassment</option>
           <option value="HATE_SPEECH">Hate Speech</option>
@@ -243,21 +248,36 @@
         </select>
       </div>
       <div class="mb-lg">
-        <label class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-sm block">Description</label>
-        <textarea [(ngModel)]="reportDescription" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-md text-on-surface focus:outline-none focus:border-primary" rows="4" placeholder="Please describe the issue (minimum 10 characters)..." maxlength="2000"></textarea>
+        <label for="report-description" class="font-label text-label-sm text-on-surface-variant uppercase tracking-widest mb-sm block">Description</label>
+        <textarea id="report-description" [(ngModel)]="reportDescription" class="w-full bg-surface-container border border-white/10 rounded-lg px-md py-sm text-body-md text-on-surface focus:outline-none focus:border-primary" rows="4" placeholder="Please describe the issue (minimum 10 characters)..." maxlength="2000"></textarea>
         <p class="text-label-sm text-on-surface-variant mt-xs">{{ reportDescription.length }}/2000</p>
       </div>
-      <button (click)="submitReport()" [disabled]="reportDescription.length < 10"
-        class="w-full bg-error text-on-error py-md rounded-xl font-body font-bold active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+      <button (click)="submitReport()" [disabled]="reportDescription.length < 10" type="button"
+        class="w-full bg-error text-on-error py-md rounded-xl font-body font-bold active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Submit report">
         Submit Report
       </button>
     </ng-container>
     <ng-template #reportSuccess>
       <div class="text-center py-lg">
-        <span class="material-symbols-outlined text-5xl text-tertiary mb-md" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+        <span class="material-symbols-outlined text-5xl text-tertiary mb-md" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">check_circle</span>
         <h3 class="font-headline text-headline-md text-on-surface mb-sm">Report Submitted</h3>
         <p class="text-on-surface-variant">Thank you. Our team will review this report.</p>
       </div>
     </ng-template>
+  </div>
+</div>
+
+<!-- Delete Account Confirmation Modal -->
+<div *ngIf="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" (click)="showDeleteConfirm = false" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+  <div class="glass-panel rounded-2xl border border-white/10 p-xl max-w-md w-full mx-md" (click)="$event.stopPropagation()">
+    <div class="flex items-center justify-between mb-lg">
+      <h3 id="delete-confirm-title" class="font-headline text-headline-md text-on-surface">Deactivate Account</h3>
+      <button (click)="showDeleteConfirm = false" type="button" class="material-symbols-outlined text-on-surface-variant hover:text-on-surface" aria-label="Close dialog">close</button>
+    </div>
+    <p class="text-on-surface-variant mb-lg">Are you sure you want to deactivate your account? This action cannot be undone. All your data, friends, and conversations will be permanently deleted.</p>
+    <div class="flex gap-md">
+      <button (click)="showDeleteConfirm = false" type="button" class="flex-1 py-md glass-panel rounded-xl text-on-surface border border-white/10 hover:bg-white/5 transition-all">Cancel</button>
+      <button (click)="deleteAccount()" type="button" class="flex-1 py-md bg-error text-on-error rounded-xl font-bold hover:brightness-110 active:scale-95 transition-all">Deactivate</button>
+    </div>
   </div>
 </div>

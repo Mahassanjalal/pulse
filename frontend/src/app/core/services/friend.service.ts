@@ -3,34 +3,15 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { PresenceService } from './presence.service';
-
-export interface Friend {
-  friendId: string;
-  peer: {
-    id: string;
-    displayName: string;
-    profilePicture: string;
-    status: string;
-    lastSeen: string;
-  };
-  isFavorite: boolean;
-}
-
-export interface FriendRequest {
-  id: string;
-  fromUser?: { id: string; displayName: string; profilePicture: string; country: string };
-  toUser?: { id: string; displayName: string; profilePicture: string; country: string };
-  status: string;
-  createdAt: string;
-}
+import { Friend, FriendRequestItem } from '@models/user.model';
 
 @Injectable({
   providedIn: 'root'
 })
 export class FriendService implements OnDestroy {
   private friends$ = new BehaviorSubject<Friend[]>([]);
-  private receivedRequests$ = new BehaviorSubject<FriendRequest[]>([]);
-  private sentRequests$ = new BehaviorSubject<FriendRequest[]>([]);
+  private receivedRequests$ = new BehaviorSubject<FriendRequestItem[]>([]);
+  private sentRequests$ = new BehaviorSubject<FriendRequestItem[]>([]);
   private presenceSub: Subscription;
 
   constructor(private http: HttpClient, private presenceService: PresenceService) {
@@ -58,11 +39,11 @@ export class FriendService implements OnDestroy {
     return this.friends$.asObservable();
   }
 
-  get receivedRequestsObs(): Observable<FriendRequest[]> {
+  get receivedRequestsObs(): Observable<FriendRequestItem[]> {
     return this.receivedRequests$.asObservable();
   }
 
-  get sentRequestsObs(): Observable<FriendRequest[]> {
+  get sentRequestsObs(): Observable<FriendRequestItem[]> {
     return this.sentRequests$.asObservable();
   }
 
@@ -80,7 +61,7 @@ export class FriendService implements OnDestroy {
   }
 
   loadRequests(): void {
-    this.http.get<{ received: FriendRequest[]; sent: FriendRequest[] }>(`${environment.apiUrl}/friends/requests`).subscribe({
+    this.http.get<{ received: FriendRequestItem[]; sent: FriendRequestItem[] }>(`${environment.apiUrl}/friends/requests`).subscribe({
       next: (res) => {
         this.receivedRequests$.next(res.received);
         this.sentRequests$.next(res.sent);

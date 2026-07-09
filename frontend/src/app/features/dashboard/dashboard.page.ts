@@ -1,45 +1,11 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
-import { FriendService, Friend } from '../../core/services/friend.service';
+import { FriendService } from '../../core/services/friend.service';
 import { PresenceService } from '../../core/services/presence.service';
-import { environment } from '@env/environment';
-
-interface DashboardStats {
-  coins: number;
-  dailyStreak: number;
-  friendsCount: number;
-  totalConversations: number;
-  trustScore: number;
-  isPremium: boolean;
-  displayName: string;
-  profilePicture: string;
-  achievements: any[];
-}
-
-interface TrendingUserRaw {
-  id: string;
-  displayName: string;
-  profilePicture: string;
-  interests: string;
-  isVerified: boolean;
-  isPremium: boolean;
-  country: string;
-  status: string;
-}
-
-interface TrendingUser {
-  id: string;
-  displayName: string;
-  profilePicture: string;
-  interests: string[];
-  isVerified: boolean;
-  isPremium: boolean;
-  country: string;
-  status: string;
-}
+import { UserService } from '../../core/services/user.service';
+import { DashboardStats, TrendingUser, Friend } from '@models/user.model';
 
 @Component({
   selector: 'pulse-dashboard',
@@ -54,13 +20,15 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
   claimError = '';
   claimSuccess = false;
   claimDisabled = false;
+  isLoading = true;
+  hasError = false;
   private presenceSub: Subscription | null = null;
 
   constructor(
-    private http: HttpClient,
     private authService: AuthService,
     private friendService: FriendService,
     private presenceService: PresenceService,
+    private userService: UserService,
     private router: Router
   ) {}
 
@@ -74,8 +42,10 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     this.presenceSub?.unsubscribe();
   }
 
-  private loadDashboard(): void {
-    this.http.get<{ stats: DashboardStats; onlineCount: number; trending: TrendingUserRaw[] }>(`${environment.apiUrl}/users/me/dashboard`).subscribe({
+  loadDashboard(): void {
+    this.isLoading = true;
+    this.hasError = false;
+    this.userService.getDashboard().subscribe({
       next: (res) => {
         this.stats = res.stats;
         this.onlineCount = res.onlineCount;
@@ -83,6 +53,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
           ...u,
           interests: this.parseJson(u.interests),
         }));
+        this.isLoading = false;
         this.presenceSub = this.presenceService.onPresenceChanged$.subscribe(({ status }) => {
           if (status === 'ONLINE') {
             this.onlineCount++;
@@ -90,6 +61,10 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
             this.onlineCount = Math.max(0, this.onlineCount - 1);
           }
         });
+      },
+      error: () => {
+        this.isLoading = false;
+        this.hasError = true;
       }
     });
   }
@@ -106,7 +81,7 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
     this.claimDisabled = true;
     this.claimError = '';
     this.claimSuccess = false;
-    this.http.post<{ coins: number; dailyStreak: number }>(`${environment.apiUrl}/users/me/daily-reward`, {}).subscribe({
+    this.userService.claimDailyReward().subscribe({
       next: (res) => {
         if (this.stats) {
           this.stats.coins = res.coins;

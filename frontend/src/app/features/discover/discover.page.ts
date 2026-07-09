@@ -1,25 +1,11 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PremiumModalService } from '../../core/services/premium-modal.service';
-import { environment } from '@env/environment';
-
-interface DiscoverUser {
-  id: string;
-  displayName: string;
-  profilePicture: string;
-  country: string;
-  interests: string;
-  languages: string;
-  age: number;
-  isVerified: boolean;
-  isPremium: boolean;
-  status: string;
-  trustScore: number;
-}
+import { UserService } from '../../core/services/user.service';
+import { DiscoverUser } from '@models/user.model';
 
 interface TaggedUser {
   id: string;
@@ -49,11 +35,11 @@ export class DiscoverPageComponent implements OnInit, OnDestroy {
   private presenceSub: Subscription | null = null;
 
   constructor(
-    private http: HttpClient,
     private authService: AuthService,
     private presenceService: PresenceService,
     private premiumModalService: PremiumModalService,
-    private router: Router
+    private router: Router,
+    private userService: UserService
   ) {}
 
   ngOnInit(): void {
@@ -75,7 +61,7 @@ export class DiscoverPageComponent implements OnInit, OnDestroy {
   loadUsers(): void {
     this.isLoading = true;
     this.hasError = false;
-    this.http.get<{ users: DiscoverUser[] }>(`${environment.apiUrl}/users/discover`).subscribe({
+    this.userService.getDiscoverUsers().subscribe({
       next: (res) => {
         this.users = res.users.map(u => ({
           id: u.id,

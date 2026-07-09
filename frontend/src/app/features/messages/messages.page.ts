@@ -1,7 +1,8 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { ChatService, Conversation, ChatMessage } from '../../core/services/chat.service';
+import { ChatService } from '../../core/services/chat.service';
 import { SocketService } from '../../core/services/socket.service';
-import { Subscription } from 'rxjs';
+import { Subscription, Subject, debounceTime, distinctUntilChanged } from 'rxjs';
+import { Conversation } from '@models/user.model';
 
 @Component({
   selector: 'pulse-messages',
@@ -11,10 +12,14 @@ import { Subscription } from 'rxjs';
 export class MessagesPageComponent implements OnInit, OnDestroy {
   activeChat: string | null = null;
   newMessage = '';
+  searchQuery = '';
   conversations: Conversation[] = [];
+  filteredConversations: Conversation[] = [];
   messages: any[] = [];
   chatError: string | null = null;
+  isPeerTyping = false;
   private subscriptions: Subscription[] = [];
+  private searchSubject = new Subject<string>();
 
   constructor(
     private chatService: ChatService,
@@ -24,7 +29,17 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.chatService.loadConversations();
     this.subscriptions.push(
-      this.chatService.conversationsObs.subscribe(convs => this.conversations = convs)
+      this.chatService.conversationsObs.subscribe(convs => {
+        this.conversations = convs;
+        this.applySearch();
+      })
+    );
+
+    this.subscriptions.push(
+      this.searchSubject.pipe(
+        debounceTime(300),
+        distinctUntilChanged()
+      ).subscribe(() => this.applySearch())
     );
 
     this.subscriptions.push(
@@ -37,6 +52,14 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
             self: msg.senderId === userId,
             time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           });
+        }
+      })
+    );
+
+    this.subscriptions.push(
+      this.chatService.typingObs$.subscribe(({ matchId, isTyping }) => {
+        if (matchId === this.activeChat) {
+          this.isPeerTyping = isTyping;
         }
       })
     );
@@ -57,12 +80,29 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(s => s.unsubscribe());
+    this.searchSubject.complete();
+  }
+
+  onSearchChange(): void {
+    this.searchSubject.next(this.searchQuery);
+  }
+
+  private applySearch(): void {
+    if (!this.searchQuery.trim()) {
+      this.filteredConversations = this.conversations;
+    } else {
+      const q = this.searchQuery.toLowerCase();
+      this.filteredConversations = this.conversations.filter(c =>
+        c.peer.displayName.toLowerCase().includes(q)
+      );
+    }
   }
 
   selectConversation(convId: string): void {
     this.activeChat = convId;
     this.messages = [];
     this.chatError = null;
+    this.isPeerTyping = false;
     this.chatService.getMessages(convId).subscribe({
       next: (res) => {
         const userId = localStorage.getItem('userId');

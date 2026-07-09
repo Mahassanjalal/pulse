@@ -1,35 +1,71 @@
 <div class="p-lg space-y-xl">
   <!-- Hero Matching Section -->
   <section class="relative rounded-3xl overflow-hidden h-[400px] group bg-gradient-to-br from-primary/5 via-surface-container to-background">
-    <div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+    <div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" aria-hidden="true"></div>
     <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-xl">
       <div class="flex items-center gap-sm bg-tertiary/10 border border-tertiary/20 px-md py-xs rounded-full mb-md">
-        <div class="w-2 h-2 rounded-full bg-tertiary pulse-animation"></div>
+        <div class="w-2 h-2 rounded-full bg-tertiary pulse-animation" aria-hidden="true"></div>
         <span class="text-tertiary font-label-md text-label-md uppercase tracking-widest">Live: {{ onlineCount | number }} Matching Now</span>
       </div>
       <h2 class="font-display text-display-lg text-on-surface drop-shadow-2xl mb-md">Ready for the unexpected?</h2>
       <p class="font-body text-body-lg text-on-surface-variant max-w-xl mb-xl">Connect with someone new instantly. Our matching engine pairs you with global discoverers based on shared vibes.</p>
       <div class="flex flex-col md:flex-row gap-lg">
-        <button class="bg-primary text-on-primary px-xl py-lg rounded-2xl font-headline text-headline-md flex items-center gap-md neon-glow-primary transition-all hover:-translate-y-1 active:scale-95" routerLink="/video">
-          <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">videocam</span>
+        <button type="button" class="bg-primary text-on-primary px-xl py-lg rounded-2xl font-headline text-headline-md flex items-center gap-md neon-glow-primary transition-all hover:-translate-y-1 active:scale-95" routerLink="/video">
+          <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">videocam</span>
           Start Random Video Chat
         </button>
-        <button class="glass-panel text-on-surface px-xl py-lg rounded-2xl font-headline text-headline-md flex items-center gap-md transition-all hover:bg-white/10 active:scale-95 border border-white/20" routerLink="/discover">
-          <span class="material-symbols-outlined text-3xl">shuffle</span>
+        <button type="button" class="glass-panel text-on-surface px-xl py-lg rounded-2xl font-headline text-headline-md flex items-center gap-md transition-all hover:bg-white/10 active:scale-95 border border-white/20" routerLink="/discover">
+          <span class="material-symbols-outlined text-3xl" aria-hidden="true">shuffle</span>
           Surprise Me
         </button>
       </div>
     </div>
   </section>
 
+  <!-- Loading Skeleton -->
+  <div *ngIf="isLoading" class="grid grid-cols-1 lg:grid-cols-4 gap-xl" aria-label="Loading dashboard">
+    <div class="lg:col-span-3 space-y-lg">
+      <div class="flex items-center justify-between">
+        <div class="h-8 w-48 bg-surface-container rounded animate-pulse"></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
+        <div *ngFor="let i of [1,2,3]" class="aspect-[3/4] rounded-2xl bg-surface-container animate-pulse"></div>
+      </div>
+    </div>
+    <div class="space-y-xl">
+      <div class="glass-panel p-lg rounded-2xl border border-white/10 space-y-md">
+        <div class="h-6 w-32 bg-surface-container rounded animate-pulse"></div>
+        <div class="h-4 w-full bg-surface-container rounded animate-pulse"></div>
+        <div class="h-10 w-full bg-surface-container rounded animate-pulse"></div>
+      </div>
+      <div class="glass-panel p-lg rounded-2xl border border-white/10 space-y-md">
+        <div class="h-6 w-32 bg-surface-container rounded animate-pulse"></div>
+        <div *ngFor="let i of [1,2]" class="flex items-center gap-md">
+          <div class="w-12 h-12 rounded-full bg-surface-container animate-pulse"></div>
+          <div class="flex-1 space-y-2">
+            <div class="h-4 w-24 bg-surface-container rounded animate-pulse"></div>
+            <div class="h-3 w-16 bg-surface-container rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="hasError && !isLoading" class="text-center py-xl" role="alert">
+    <span class="material-symbols-outlined text-6xl text-error/40 mb-md" aria-hidden="true">error_outline</span>
+    <p class="text-on-surface-variant text-body-md mb-md">Failed to load dashboard data</p>
+    <button (click)="loadDashboard()" type="button" class="text-primary hover:underline font-label text-label-md">Try Again</button>
+  </div>
+
   <!-- Main Grid: Trending & Rewards -->
-  <div class="grid grid-cols-1 lg:grid-cols-4 gap-xl">
+  <div *ngIf="!isLoading && !hasError" class="grid grid-cols-1 lg:grid-cols-4 gap-xl">
     <!-- Trending Grid (Main Column) -->
     <div class="lg:col-span-3 space-y-lg">
       <div class="flex items-center justify-between">
         <h3 class="font-headline text-headline-lg text-on-surface flex items-center gap-md">
           Trending Now
-          <span class="text-secondary material-symbols-outlined animate-pulse">local_fire_department</span>
+          <span class="text-secondary material-symbols-outlined animate-pulse" aria-hidden="true">local_fire_department</span>
         </h3>
         <a class="text-primary font-label text-label-md hover:underline" routerLink="/discover">View All</a>
       </div>
@@ -37,15 +73,17 @@
         <div *ngFor="let user of trending" class="relative group aspect-[3/4] rounded-2xl overflow-hidden glass-panel border border-white/10 cursor-pointer transition-all duration-300"
           (mouseenter)="onCardEnter($any($event.currentTarget))"
           (mouseleave)="onCardLeave($any($event.currentTarget))"
-          (click)="viewProfile(user.id)">
+          (click)="viewProfile(user.id)"
+          role="article"
+          [attr.aria-label]="user.displayName + ' profile'">
           <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" [style.background-image]="'url(' + (user.profilePicture || 'https://i.pravatar.cc/400?img=' + (trending.indexOf(user) + 1)) + ')'"></div>
-          <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+          <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" aria-hidden="true"></div>
           <div class="absolute top-4 left-4 bg-tertiary px-sm py-xs rounded-lg flex items-center gap-xs">
-            <span class="w-1.5 h-1.5 bg-white rounded-full pulse-animation"></span>
+            <span class="w-1.5 h-1.5 bg-white rounded-full pulse-animation" aria-hidden="true"></span>
             <span class="text-[10px] font-bold text-on-tertiary">LIVE</span>
           </div>
-          <div *ngIf="user.isVerified" class="absolute top-4 right-4 text-secondary">
-            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">verified</span>
+          <div *ngIf="user.isVerified" class="absolute top-4 right-4 text-secondary" aria-label="Verified user">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">verified</span>
           </div>
           <div class="absolute bottom-0 left-0 right-0 p-lg">
             <h4 class="font-headline text-headline-md text-white mb-xs">{{ user.displayName }}</h4>
@@ -64,16 +102,16 @@
     <div class="space-y-xl">
       <div class="glass-panel p-lg rounded-2xl border border-white/10 space-y-md">
         <h3 class="font-headline text-headline-md text-on-surface flex items-center gap-sm">
-          <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">stars</span>
+          <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">stars</span>
           Daily Rewards
         </h3>
         <p class="font-body text-body-md text-on-surface-variant opacity-70">Complete streaks to unlock exclusive Premium filters.</p>
         <div class="flex items-center justify-between bg-surface/40 p-md rounded-xl border border-white/5">
           <div>
             <p class="text-[10px] text-primary uppercase font-bold tracking-widest">Streak</p>
-            <p class="font-headline text-headline-md">{{ stats?.dailyStreak || 0 }} Days 🔥</p>
+            <p class="font-headline text-headline-md">{{ stats?.dailyStreak || 0 }} Days &#x1F525;</p>
           </div>
-          <div class="flex -space-x-2">
+          <div class="flex -space-x-2" aria-hidden="true">
             <div class="w-8 h-8 rounded-full bg-primary border-2 border-surface flex items-center justify-center"><span class="text-xs font-bold text-on-primary">M</span></div>
             <div class="w-8 h-8 rounded-full bg-primary border-2 border-surface flex items-center justify-center"><span class="text-xs font-bold text-on-primary">T</span></div>
             <div class="w-8 h-8 rounded-full bg-primary border-2 border-surface flex items-center justify-center"><span class="text-xs font-bold text-on-primary">W</span></div>
@@ -82,36 +120,36 @@
             <div class="w-8 h-8 rounded-full bg-surface-variant border-2 border-surface flex items-center justify-center"><span class="text-xs font-bold text-on-surface-variant">S</span></div>
           </div>
         </div>
-        <button (click)="claimDailyReward()" [disabled]="claimDisabled" class="w-full bg-secondary-container text-on-secondary-container py-sm rounded-xl font-label text-label-md neon-glow-cyan hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-          {{ claimSuccess ? 'Claimed! +10 Gems' : 'Claim Daily Gems ✨' }}
+        <button (click)="claimDailyReward()" [disabled]="claimDisabled" type="button" class="w-full bg-secondary-container text-on-secondary-container py-sm rounded-xl font-label text-label-md neon-glow-cyan hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Claim daily gems">
+          {{ claimSuccess ? 'Claimed! +10 Gems' : 'Claim Daily Gems' }}
         </button>
-        <p *ngIf="claimError" class="text-error text-label-sm text-center">{{ claimError }}</p>
+        <p *ngIf="claimError" class="text-error text-label-sm text-center" role="alert">{{ claimError }}</p>
       </div>
 
       <!-- Quick Friends -->
       <div class="glass-panel p-lg rounded-2xl border border-white/10 space-y-md">
         <h3 class="font-headline text-headline-md text-on-surface">Quick Friends</h3>
         <div class="space-y-lg">
-          <div *ngFor="let friend of friends" class="flex items-center justify-between group cursor-pointer" [routerLink]="['/profile', friend.peer.id]">
+          <div *ngFor="let friend of friends" class="flex items-center justify-between group cursor-pointer" [routerLink]="['/profile', friend.peer.id]" role="link" [attr.aria-label]="friend.peer.displayName + ' profile'">
             <div class="flex items-center gap-md">
               <div class="relative">
                 <div class="w-12 h-12 rounded-full overflow-hidden border border-white/20">
                   <img class="w-full h-full object-cover" [src]="friend.peer.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="friend.peer.displayName" />
                 </div>
-                <div *ngIf="friend.peer.status === 'ONLINE'" class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface pulse-animation"></div>
+                <div *ngIf="friend.peer.status === 'ONLINE'" class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface pulse-animation" [attr.aria-label]="friend.peer.displayName + ' is online'"></div>
               </div>
               <div>
                 <p class="font-label text-label-md text-on-surface group-hover:text-primary transition-all">{{ friend.peer.displayName }}</p>
                 <p class="text-[10px] text-on-surface-variant">{{ friend.peer.status === 'ONLINE' ? 'Online now' : 'Offline' }}</p>
               </div>
             </div>
-            <span class="material-symbols-outlined text-on-surface-variant opacity-40 group-hover:opacity-100 group-hover:text-primary transition-all" [routerLink]="['/messages']">chat</span>
+            <span class="material-symbols-outlined text-on-surface-variant opacity-40 group-hover:opacity-100 group-hover:text-primary transition-all" [routerLink]="['/messages']" aria-label="Message">chat</span>
           </div>
           <div *ngIf="friends.length === 0" class="text-center py-md text-on-surface-variant text-sm">
             No friends yet. Start matching to connect!
           </div>
         </div>
-        <button class="w-full text-primary font-label text-label-md pt-md border-t border-white/5 hover:text-white transition-all" routerLink="/friends">See All Friends →</button>
+        <button type="button" class="w-full text-primary font-label text-label-md pt-md border-t border-white/5 hover:text-white transition-all" routerLink="/friends">See All Friends</button>
       </div>
     </div>
   </div>

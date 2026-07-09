@@ -3,34 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subject, Subscription, tap } from 'rxjs';
 import { environment } from '@env/environment';
 import { PresenceService } from './presence.service';
-
-export interface ChatMessage {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  matchId: string;
-  content: string;
-  type: 'text' | 'image' | 'voice' | 'video' | 'emoji' | 'gif' | 'sticker';
-  timestamp: Date;
-  createdAt?: string;
-  read: boolean;
-  deleted: boolean;
-}
-
-export interface Conversation {
-  id: string;
-  peer: {
-    id: string;
-    displayName: string;
-    profilePicture: string;
-    status: string;
-  };
-  lastMessage: {
-    content: string;
-    createdAt: string;
-  } | null;
-  unreadCount: number;
-}
+import { ChatMessage, Conversation } from '@models/user.model';
 
 @Injectable({
   providedIn: 'root'

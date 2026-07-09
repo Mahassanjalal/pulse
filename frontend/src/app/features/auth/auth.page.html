@@ -1,7 +1,6 @@
 <div class="flex min-h-screen w-full overflow-hidden">
   <!-- Left Section: Visual Kinetic Brand Side -->
   <section class="hidden lg:flex relative w-1/2 flex-col justify-between p-xl overflow-hidden" pulseShaderBg>
-    <!-- Dark overlay so text stays readable over the shader -->
     <div class="absolute inset-0 bg-background/60 z-0 pointer-events-none"></div>
     <div class="relative z-20 flex items-center gap-sm">
       <span class="font-display text-display-lg font-black text-primary tracking-tighter kinetic-text uppercase">Pulse</span>
@@ -34,54 +33,85 @@
       </div>
 
       <!-- Tab Toggle -->
-      <div class="flex p-xs bg-surface-container rounded-xl border border-white/5 shadow-inner">
+      <div class="flex p-xs bg-surface-container rounded-xl border border-white/5 shadow-inner" role="tablist" aria-label="Authentication mode">
         <button
-          (click)="mode = 'login'"
+          (click)="switchMode('login')"
           [class]="mode === 'login' ? 'bg-surface-variant text-white shadow-lg' : 'text-on-surface-variant hover:text-white'"
-          class="flex-1 py-sm rounded-lg font-label text-label-md transition-all duration-300">
+          class="flex-1 py-sm rounded-lg font-label text-label-md transition-all duration-300"
+          role="tab"
+          [attr.aria-selected]="mode === 'login'"
+          type="button">
           Login
         </button>
         <button
-          (click)="mode = 'register'"
+          (click)="switchMode('register')"
           [class]="mode === 'register' ? 'bg-surface-variant text-white shadow-lg' : 'text-on-surface-variant hover:text-white'"
-          class="flex-1 py-sm rounded-lg font-label text-label-md transition-all duration-300">
+          class="flex-1 py-sm rounded-lg font-label text-label-md transition-all duration-300"
+          role="tab"
+          [attr.aria-selected]="mode === 'register'"
+          type="button">
           Sign Up
         </button>
       </div>
 
       <!-- Form -->
-      <form class="space-y-md" (ngSubmit)="onSubmit()">
+      <form class="space-y-md" (ngSubmit)="onSubmit()" [formGroup]="authForm" novalidate>
         <div *ngIf="mode === 'register'" class="space-y-sm">
-          <label class="font-label text-label-md text-on-surface-variant px-1">Display Name</label>
-          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
-            placeholder="Your name" type="text" [(ngModel)]="displayName" name="displayName"/>
+          <label for="displayName" class="font-label text-label-md text-on-surface-variant px-1">Display Name</label>
+          <input id="displayName" formControlName="displayName"
+            class="w-full h-14 bg-surface-container-high border rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            [class]="(f['displayName'].touched && f['displayName'].invalid) ? 'border-error' : 'border-white/10'"
+            placeholder="Your name" type="text" autocomplete="name" aria-required="true" />
+          <div *ngIf="f['displayName'].touched && f['displayName'].invalid" class="text-error text-xs px-1" role="alert">
+            <span *ngIf="f['displayName'].errors?.['required']">Display name is required</span>
+            <span *ngIf="f['displayName'].errors?.['minlength']">Must be at least 2 characters</span>
+          </div>
         </div>
         <div *ngIf="mode === 'register'" class="space-y-sm">
-          <label class="font-label text-label-md text-on-surface-variant px-1">Username</label>
-          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
-            placeholder="username" type="text" [(ngModel)]="username" name="username"/>
+          <label for="username" class="font-label text-label-md text-on-surface-variant px-1">Username</label>
+          <input id="username" formControlName="username"
+            class="w-full h-14 bg-surface-container-high border rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            [class]="(f['username'].touched && f['username'].invalid) ? 'border-error' : 'border-white/10'"
+            placeholder="username" type="text" autocomplete="username" aria-required="true" />
+          <div *ngIf="f['username'].touched && f['username'].invalid" class="text-error text-xs px-1" role="alert">
+            <span *ngIf="f['username'].errors?.['required']">Username is required</span>
+            <span *ngIf="f['username'].errors?.['minlength']">Must be at least 3 characters</span>
+            <span *ngIf="f['username'].errors?.['pattern']">Only letters, numbers, and underscores</span>
+          </div>
         </div>
         <div class="space-y-sm">
-          <label class="font-label text-label-md text-on-surface-variant px-1">Email</label>
-          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
-            placeholder="name@email.com" type="email" [(ngModel)]="email" name="email"/>
+          <label for="email" class="font-label text-label-md text-on-surface-variant px-1">Email</label>
+          <input id="email" formControlName="email"
+            class="w-full h-14 bg-surface-container-high border rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            [class]="(f['email'].touched && f['email'].invalid) ? 'border-error' : 'border-white/10'"
+            placeholder="name@email.com" type="email" autocomplete="email" aria-required="true" />
+          <div *ngIf="f['email'].touched && f['email'].invalid" class="text-error text-xs px-1" role="alert">
+            <span *ngIf="f['email'].errors?.['required']">Email is required</span>
+            <span *ngIf="f['email'].errors?.['email']">Please enter a valid email</span>
+          </div>
         </div>
         <div class="space-y-sm">
           <div class="flex justify-between items-center px-1">
-            <label class="font-label text-label-md text-on-surface-variant">Password</label>
-            <a *ngIf="mode === 'login'" class="text-secondary font-label text-label-sm hover:underline" href="#">Forgot?</a>
+            <label for="password" class="font-label text-label-md text-on-surface-variant">Password</label>
+            <a *ngIf="mode === 'login'" class="text-secondary font-label text-label-sm hover:underline cursor-pointer" (click)="error = 'Password reset is not yet available. Please contact support.'">Forgot?</a>
           </div>
-          <input class="w-full h-14 bg-surface-container-high border border-white/10 rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
-            placeholder="••••••••" type="password" [(ngModel)]="password" name="password"/>
+          <input id="password" formControlName="password"
+            class="w-full h-14 bg-surface-container-high border rounded-xl px-md text-on-surface placeholder:text-outline/50 transition-all font-body focus:outline-none focus:border-secondary focus:shadow-[0_0_10px_rgba(0,238,252,0.2)]"
+            [class]="(f['password'].touched && f['password'].invalid) ? 'border-error' : 'border-white/10'"
+            placeholder="••••••••" type="password" autocomplete="current-password" aria-required="true" />
+          <div *ngIf="f['password'].touched && f['password'].invalid" class="text-error text-xs px-1" role="alert">
+            <span *ngIf="f['password'].errors?.['required']">Password is required</span>
+            <span *ngIf="f['password'].errors?.['minlength']">Must be at least 6 characters</span>
+          </div>
         </div>
-        <div *ngIf="error" class="text-error text-sm text-center">{{ error }}</div>
-        <button class="w-full h-14 bg-primary text-on-primary font-headline text-headline-md rounded-xl neon-glow-primary transition-all hover:brightness-110 active:scale-[0.98] mt-lg" type="submit" [disabled]="loading">
+        <div *ngIf="error" class="text-error text-sm text-center" role="alert">{{ error }}</div>
+        <button class="w-full h-14 bg-primary text-on-primary font-headline text-headline-md rounded-xl neon-glow-primary transition-all hover:brightness-110 active:scale-[0.98] mt-lg" type="submit" [disabled]="loading" aria-label="Submit authentication form">
           {{ loading ? 'Please wait...' : (mode === 'login' ? 'Continue' : 'Join Pulse') }}
         </button>
       </form>
 
       <!-- Divider -->
-      <div class="relative flex items-center py-sm">
+      <div class="relative flex items-center py-sm" role="separator">
         <div class="flex-grow border-t border-white/10"></div>
         <span class="flex-shrink mx-4 font-label text-label-sm text-outline/60">OR CONTINUE WITH</span>
         <div class="flex-grow border-t border-white/10"></div>
@@ -89,8 +119,8 @@
 
       <!-- Social Auth -->
       <div class="grid grid-cols-1 gap-md">
-        <button (click)="signInWithGoogle()" [disabled]="loading" class="flex items-center justify-center gap-sm h-14 glass-panel rounded-xl hover:bg-white/5 transition-colors font-label text-label-md border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed">
-          <svg class="w-5 h-5" viewBox="0 0 48 48">
+        <button type="button" (click)="signInWithGoogle()" [disabled]="loading" class="flex items-center justify-center gap-sm h-14 glass-panel rounded-xl hover:bg-white/5 transition-colors font-label text-label-md border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Sign in with Google">
+          <svg class="w-5 h-5" viewBox="0 0 48 48" aria-hidden="true">
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
             <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
             <path fill="#FBBC05" d="M10.54 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.87 7.35 2.56 10.56l7.98-5.97z"/>

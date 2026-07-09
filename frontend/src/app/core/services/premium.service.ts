@@ -2,26 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '@env/environment';
-
-export interface Plan {
-  id: string;
-  name: string;
-  price: number;
-  period: string;
-  features: string[];
-  popular: boolean;
-}
-
-export interface SubscriptionInfo {
-  id: string;
-  planType: string;
-  price: number;
-  period: string;
-  features: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-}
+import { PremiumPlan, SubscriptionInfo } from '@models/user.model';
 
 @Injectable({
   providedIn: 'root'
@@ -29,8 +10,8 @@ export interface SubscriptionInfo {
 export class PremiumService {
   constructor(private http: HttpClient) {}
 
-  getPlans(): Observable<{ plans: Plan[] }> {
-    return this.http.get<{ plans: Plan[] }>(`${environment.apiUrl}/premium/plans`);
+  getPlans(): Observable<{ plans: PremiumPlan[] }> {
+    return this.http.get<{ plans: PremiumPlan[] }>(`${environment.apiUrl}/premium/plans`);
   }
 
   getSubscription(): Observable<{ subscription: SubscriptionInfo | null }> {
