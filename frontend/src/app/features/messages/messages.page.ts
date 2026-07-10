@@ -3,6 +3,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ChatService } from '../../core/services/chat.service';
 import { SocketService } from '../../core/services/socket.service';
 import { FriendService } from '../../core/services/friend.service';
+import { CallService } from '../../core/services/call.service';
+import { CallSoundService } from '../../core/services/call-sound.service';
 import { Subscription, Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { Conversation, Friend } from '@models/user.model';
 
@@ -31,7 +33,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     private socketService: SocketService,
     private friendService: FriendService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private callService: CallService,
+    private callSoundService: CallSoundService
   ) {}
 
   ngOnInit(): void {
@@ -234,7 +238,13 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   callFriend(): void {
     const conv = this.getActiveConversation();
     if (!conv) return;
+    this.callSoundService.unlock();
     this.socketService.callFriend(conv.peer.id);
-    this.router.navigate(['/video']);
+    this.callService.start({
+      callId: '',
+      calleeId: conv.peer.id,
+      calleeName: conv.peer.displayName,
+      calleeAvatar: conv.peer.profilePicture || '',
+    });
   }
 }

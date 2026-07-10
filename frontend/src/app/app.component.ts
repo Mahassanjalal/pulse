@@ -3,6 +3,8 @@ import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { PremiumModalService } from './core/services/premium-modal.service';
 import { SocketService } from './core/services/socket.service';
+import { CallService } from './core/services/call.service';
+import { CallSoundService } from './core/services/call-sound.service';
 
 @Component({
   selector: 'app-root',
@@ -56,6 +58,22 @@ import { SocketService } from './core/services/socket.service';
         </div>
       </div>
 
+      <!-- Outgoing call overlay (caller) -->
+      <ng-container *ngIf="callService.outgoingCall$ | async as outgoing">
+        <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md px-lg">
+          <div class="w-full max-w-sm glass-panel rounded-3xl border border-white/10 p-xl text-center">
+            <div class="w-28 h-28 mx-auto rounded-full overflow-hidden border-2 border-secondary/40 mb-lg pulse-animation">
+              <img class="w-full h-full object-cover" [src]="(outgoing.calleeAvatar || 'https://i.pravatar.cc/150?img=5')" [alt]="outgoing.calleeName" />
+            </div>
+            <h3 class="font-headline text-headline-md text-on-surface mb-xs">Calling…</h3>
+            <p class="font-body text-body-lg text-on-surface-variant mb-xl">{{ outgoing.calleeName || 'Friend' }}</p>
+            <button (click)="cancelOutgoingCall()" type="button" class="w-16 h-16 mx-auto rounded-full bg-error/20 border border-error/40 text-error flex items-center justify-center hover:bg-error/30 active:scale-95 transition-all">
+              <span class="material-symbols-outlined text-3xl">call_end</span>
+            </button>
+          </div>
+        </div>
+      </ng-container>
+
       <!-- Call status toast (caller) -->
       <div *ngIf="callToast" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] bg-surface/90 backdrop-blur-md border border-white/10 px-lg py-md rounded-xl shadow-2xl">
         <p class="font-label text-label-md text-on-surface">{{ callToast }}</p>
@@ -85,7 +103,9 @@ export class AppComponent {
   constructor(
     private router: Router,
     private premiumModalService: PremiumModalService,
-    private socketService: SocketService
+    private socketService: SocketService,
+    private callService: CallService,
+    private callSoundService: CallSoundService
   ) {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
@@ -96,6 +116,7 @@ export class AppComponent {
     this.socketService.on('incoming_call').subscribe((data: any) => {
       if (this.incomingCall) return;
       this.incomingCall = data;
+      this.callSoundService.startRinging();
       this.callTimeout = setTimeout(() => this.declineIncomingCall(), 30000);
     });
 
@@ -104,15 +125,33 @@ export class AppComponent {
     });
 
     this.socketService.on('call_declined').subscribe(() => {
+      this.callService.clear();
       this.showCallToast('Call declined');
     });
 
     this.socketService.on('call_error').subscribe((data: any) => {
+      // Errors for the outgoing call (busy, offline, not friends, timed out)
+      // clear the calling overlay; the message always surfaces as a toast.
+      this.callService.clear();
       this.showCallToast(data?.message || 'Call failed');
+    });
+
+    // The server confirms the call was created and returns the callId so the
+    // caller can render a "calling..." overlay and allow cancellation.
+    this.socketService.on('call_initiated').subscribe((data: any) => {
+      const existing = this.callService.current;
+      if (existing && existing.callId === data.callId) return;
+      this.callService.start({
+        callId: data.callId,
+        calleeId: data.calleeId,
+        calleeName: existing?.calleeName || '',
+        calleeAvatar: existing?.calleeAvatar || '',
+      });
     });
 
     // Ensure the callee lands in the video room when a call is accepted.
     this.socketService.on('match_found').subscribe(() => {
+      this.callService.clear();
       const path = this.router.url.split('?')[0];
       if (!path.startsWith('/video')) {
         this.router.navigate(['/video']);
@@ -124,17 +163,27 @@ export class AppComponent {
     if (!this.incomingCall) return;
     const callId = this.incomingCall.callId;
     this.clearIncomingCall();
+    this.callSoundService.unlock();
     this.socketService.acceptCall(callId);
     this.router.navigate(['/video']);
   }
 
   declineIncomingCall(): void {
     if (!this.incomingCall) return;
+    this.callSoundService.unlock();
     this.socketService.declineCall(this.incomingCall.callId);
     this.clearIncomingCall();
   }
 
+  cancelOutgoingCall(): void {
+    const call = this.callService.current;
+    if (!call) return;
+    this.socketService.cancelCall(call.callId);
+    this.callService.clear();
+  }
+
   private clearIncomingCall(): void {
+    this.callSoundService.stopRinging();
     this.incomingCall = null;
     if (this.callTimeout) {
       clearTimeout(this.callTimeout);

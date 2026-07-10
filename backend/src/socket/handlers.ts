@@ -26,6 +26,7 @@ const waitingUsers = new Map<string, { socketId: string; filters?: any }>();
 const claimedUsers = new Set<string>();
 const activeMatches = new Map<string, { user1: string; user2: string; matchId: string; startTime: number }>();
 const pendingCalls = new Map<string, { callerId: string; calleeId: string }>();
+const pendingCallTimers = new Map<string, NodeJS.Timeout>();
 
 // Multi-tab connection tracking: userId -> Set<socketId>
 const userConnections = new Map<string, Set<string>>();
@@ -394,6 +395,14 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         return;
       }
 
+      // Prevent the caller from starting multiple concurrent calls.
+      for (const pending of pendingCalls.values()) {
+        if (pending.callerId === userId) {
+          socket.emit('call_error', { message: 'You already have an outgoing call' });
+          return;
+        }
+      }
+
       const existingFriend = await prisma.friend.findFirst({
         where: {
           OR: [
@@ -414,9 +423,17 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         socket.emit('call_error', { message: 'You are already in a call' });
         return;
       }
+      // The callee is busy if they're already in a match OR already have a
+      // pending incoming call from someone else.
       if (isUserInMatch(friendId)) {
         socket.emit('call_error', { message: 'User is busy in another call' });
         return;
+      }
+      for (const pending of pendingCalls.values()) {
+        if (pending.calleeId === friendId) {
+          socket.emit('call_error', { message: 'User is busy in another call' });
+          return;
+        }
       }
       const calleeConns = userConnections.get(friendId);
       if (!calleeConns || calleeConns.size === 0) {
@@ -424,13 +441,34 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         return;
       }
 
+      // Cancel any random-matching queue so the user doesn't get paired while
+      // their direct call is ringing.
+      if (waitingUsers.has(userId)) {
+        waitingUsers.delete(userId);
+        claimedUsers.delete(userId);
+        socket.emit('matching_cancelled');
+      }
+
       const callId = uuidv4();
       pendingCalls.set(callId, { callerId: userId, calleeId: friendId });
+
+      // Auto-expire the pending call if neither side acts on it.
+      const callTimeout = setTimeout(() => {
+        if (pendingCalls.get(callId)) {
+          pendingCalls.delete(callId);
+          socket.emit('call_error', { message: 'Call timed out', code: 'CALL_TIMEOUT' });
+          io.to(`user_${friendId}`).emit('call_cancelled', { callId });
+        }
+      }, 30000);
+      pendingCallTimers.set(callId, callTimeout);
 
       const caller = await prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, displayName: true, profilePicture: true },
       });
+
+      // Let the caller track this call (for the "calling..." UI + cancel).
+      socket.emit('call_initiated', { callId, calleeId: friendId });
 
       io.to(`user_${friendId}`).emit('incoming_call', {
         callId,
@@ -449,6 +487,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         return;
       }
       pendingCalls.delete(data.callId);
+      const timer = pendingCallTimers.get(data.callId);
+      if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
 
       const match = await prisma.match.create({
         data: {
@@ -493,6 +533,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       if (!pending) return;
       if (pending.calleeId !== userId && pending.callerId !== userId) return;
       pendingCalls.delete(data.callId);
+      const timer = pendingCallTimers.get(data.callId);
+      if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
       io.to(`user_${pending.callerId}`).emit('call_declined', { callId: data.callId });
     });
 
@@ -501,6 +543,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       if (!pending) return;
       if (pending.callerId !== userId) return;
       pendingCalls.delete(data.callId);
+      const timer = pendingCallTimers.get(data.callId);
+      if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
       io.to(`user_${pending.calleeId}`).emit('call_cancelled', { callId: data.callId });
     });
 
@@ -699,8 +743,28 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       waitingUsers.delete(userId);
       claimedUsers.delete(userId);
 
-      // Multi-tab: only go OFFLINE if this was the last connection
+      // Clean up any pending calls involving this user. Only act on the last
+      // connection to avoid duplicate notifications across multi-tab sessions.
       const connections = userConnections.get(userId);
+      const isLastConnection = !connections || connections.size <= 1;
+      if (isLastConnection) {
+        for (const [callId, pending] of pendingCalls.entries()) {
+          if (pending.callerId === userId || pending.calleeId === userId) {
+            const timer = pendingCallTimers.get(callId);
+            if (timer) clearTimeout(timer);
+            pendingCallTimers.delete(callId);
+            pendingCalls.delete(callId);
+            const otherId = pending.callerId === userId ? pending.calleeId : pending.callerId;
+            if (pending.callerId === userId) {
+              io.to(`user_${otherId}`).emit('call_cancelled', { callId });
+            } else {
+              io.to(`user_${otherId}`).emit('call_declined', { callId });
+            }
+          }
+        }
+      }
+
+      // Multi-tab: only go OFFLINE if this was the last connection
       if (connections) {
         connections.delete(socket.id);
         if (connections.size === 0) {
