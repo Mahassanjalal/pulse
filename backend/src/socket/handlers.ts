@@ -452,14 +452,15 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const callId = uuidv4();
       pendingCalls.set(callId, { callerId: userId, calleeId: friendId });
 
-      // Auto-expire the pending call if neither side acts on it.
+      // Auto-expire the pending call if neither side acts on it (~12s is a
+      // standard unanswered-call window before the caller is given up).
       const callTimeout = setTimeout(() => {
         if (pendingCalls.get(callId)) {
           pendingCalls.delete(callId);
           socket.emit('call_error', { message: 'Call timed out', code: 'CALL_TIMEOUT' });
           io.to(`user_${friendId}`).emit('call_cancelled', { callId });
         }
-      }, 30000);
+      }, 12000);
       pendingCallTimers.set(callId, callTimeout);
 
       const caller = await prisma.user.findUnique({

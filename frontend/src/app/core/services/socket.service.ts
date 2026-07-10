@@ -10,7 +10,22 @@ export class SocketService implements OnDestroy {
   private socket: Socket | null = null;
   private connectionState$ = new Subject<'connected' | 'disconnected' | 'reconnecting'>();
   private eventHandlers = new Map<string, Subject<any>>();
+  // Events that already have a live listener on the CURRENT socket, so we never
+  // attach the same listener twice (e.g. across reconnects or re-calls).
+  private attached = new Set<string>();
   private heartbeatInterval: any = null;
+
+  // Core events we always want a socket listener for once connected. Any event
+  // already subscribed via on() before connect() runs is attached too (see
+  // connect()), which fixes early subscribers being orphaned.
+  private readonly events = [
+    'match_found', 'match_skipped', 'match_ended', 'matching_queue', 'matching_cancelled',
+    'webrtc_offer', 'webrtc_answer', 'webrtc_candidate',
+    'match_message', 'match_message_sent', 'peer_typing',
+    'friend_request_notification', 'friend_request_received', 'friend_request_accepted', 'friend_added',
+    'notification', 'presence_changed', 'presence_sync_result', 'pong',
+    'incoming_call', 'call_declined', 'call_cancelled', 'call_error', 'call_initiated',
+  ];
 
   ngOnDestroy(): void {
     this.stopHeartbeat();
@@ -39,28 +54,41 @@ export class SocketService implements OnDestroy {
     });
     this.socket.on('reconnect_attempt', () => this.connectionState$.next('reconnecting'));
 
-    const events = [
-      'match_found', 'match_skipped', 'match_ended', 'matching_queue', 'matching_cancelled',
-      'webrtc_offer', 'webrtc_answer', 'webrtc_candidate',
-      'match_message', 'match_message_sent', 'peer_typing',
-      'friend_request_notification', 'friend_request_received', 'friend_request_accepted', 'friend_added',
-      'notification', 'presence_changed', 'presence_sync_result', 'pong',
-      'incoming_call', 'call_declined', 'call_cancelled', 'call_error',
-    ];
+    // Attach listeners for every core event AND any event already subscribed to
+    // via on() (e.g. AppComponent's incoming_call, which subscribed before
+    // connect() ran). Reuses the existing Subject so early subscribers keep
+    // receiving events instead of being orphaned on a no-op listener.
+    const eventsToAttach = new Set<string>([...this.events, ...this.eventHandlers.keys()]);
+    eventsToAttach.forEach(event => this.attach(event));
+  }
 
-    events.forEach(event => {
-      const subject = new Subject<any>();
+  /**
+   * Ensures an event has a Subject and — if the socket is live — a socket
+   * listener. Safe to call repeatedly: the listener is only ever attached once
+   * per live socket (tracked via `attached`), and any pre-existing Subject is
+   * reused so early subscribers are not disconnected from the stream.
+   */
+  private attach(event: string): void {
+    if (this.attached.has(event)) return;
+    let subject = this.eventHandlers.get(event);
+    if (!subject) {
+      subject = new Subject<any>();
       this.eventHandlers.set(event, subject);
-      this.socket?.on(event, (data: any) => subject.next(data));
-    });
+    }
+    if (this.socket) {
+      this.attached.add(event);
+      this.socket.on(event, (data: any) => subject!.next(data));
+    }
   }
 
   disconnect(): void {
     this.stopHeartbeat();
+    this.attached.clear();
     this.socket?.disconnect();
     this.socket = null;
-    this.eventHandlers.forEach(s => s.complete());
-    this.eventHandlers.clear();
+    // Keep eventHandlers/Subjects alive so persistent subscribers (root
+    // AppComponent, singleton services) survive a disconnect/reconnect instead
+    // of being left on a completed/detached Subject.
   }
 
   private startHeartbeat(): void {
@@ -82,11 +110,10 @@ export class SocketService implements OnDestroy {
   }
 
   on(event: string): Observable<any> {
-    if (!this.eventHandlers.has(event)) {
-      const subject = new Subject<any>();
-      this.eventHandlers.set(event, subject);
-      this.socket?.on(event, (data: any) => subject.next(data));
-    }
+    // Reuse the existing Subject (creating one if needed) and attach a socket
+    // listener if the socket is live. Works whether called before or after
+    // connect() — early subscribers are never orphaned.
+    this.attach(event);
     return this.eventHandlers.get(event)!.asObservable();
   }
 

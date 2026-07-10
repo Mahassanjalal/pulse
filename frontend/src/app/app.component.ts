@@ -113,11 +113,14 @@ export class AppComponent {
       this.updateLayout(event.urlAfterRedirects || event.url);
     });
 
-    this.socketService.on('incoming_call').subscribe((data: any) => {
+      this.socketService.on('incoming_call').subscribe((data: any) => {
       if (this.incomingCall) return;
       this.incomingCall = data;
       this.callSoundService.startRinging();
-      this.callTimeout = setTimeout(() => this.declineIncomingCall(), 30000);
+      // Auto-decline if the callee ignores the call. Must match (or be slightly
+      // below) the backend's pending-call expiry so the panel closes before the
+      // server emits call_cancelled for the same call.
+      this.callTimeout = setTimeout(() => this.declineIncomingCall(), 11000);
     });
 
     this.socketService.on('call_cancelled').subscribe(() => {
