@@ -57,7 +57,7 @@
       <ng-container *ngIf="status === 'matched' && currentPeer">
         <!-- Peer Video (Main) -->
         <div class="absolute inset-0">
-          <video #remoteVideo class="w-full h-full object-cover" autoplay playsinline></video>
+          <video #remoteVideo class="w-full h-full object-cover" style="transform: scaleX(-1);" autoplay playsinline></video>
           <div class="absolute inset-0 border-2 border-secondary/30 neon-glow-cyan transition-transform duration-75"
             [style.transform]="'translate(' + glowX + 'px, ' + glowY + 'px)'"></div>
         </div>
@@ -75,7 +75,7 @@
 
         <!-- Self PiP Video (Bottom Left) -->
         <div class="absolute bottom-28 left-lg z-20 w-28 md:w-44 aspect-video rounded-2xl overflow-hidden border-2 border-surface shadow-xl">
-          <video #localVideo class="w-full h-full object-cover" autoplay playsinline muted></video>
+          <video #localVideo class="w-full h-full object-cover" style="transform: scaleX(-1);" autoplay playsinline muted></video>
           <div *ngIf="isMuted" class="absolute inset-0 flex items-center justify-center bg-black/50">
             <span class="material-symbols-outlined text-error">mic_off</span>
           </div>
