@@ -81,6 +81,22 @@ async function main() {
   });
   console.log('  Created demo friend request');
 
+  // Seed coin packages (idempotent upsert so re-running seed is safe).
+  const COIN_PACKAGES = [
+    { id: 'coins_100', name: 'Starter', coins: 100, priceUsd: 0.99, bonus: 0, popular: false },
+    { id: 'coins_550', name: 'Popular', coins: 550, priceUsd: 4.99, bonus: 50, popular: true },
+    { id: 'coins_1200', name: 'Pro', coins: 1200, priceUsd: 9.99, bonus: 150, popular: false },
+    { id: 'coins_3000', name: 'Legend', coins: 3000, priceUsd: 19.99, bonus: 500, popular: false },
+  ];
+  for (const pkg of COIN_PACKAGES) {
+    await prisma.coinPackage.upsert({
+      where: { id: pkg.id },
+      update: {},
+      create: pkg,
+    });
+  }
+  console.log('  Created coin packages');
+
   console.log('Seeding complete!');
 }
 

@@ -75,6 +75,12 @@ const routes: Routes = [
     loadChildren: () => import('./features/premium/premium.module').then(m => m.PremiumModule)
   },
   {
+    path: 'coins',
+    loadChildren: () => import('./features/coins/coins.page').then(m => m.CoinsModule),
+    canActivate: [AuthGuard],
+    data: { layout: 'authenticated' }
+  },
+  {
     path: 'about',
     loadChildren: () => import('./features/about/about.module').then(m => m.AboutModule)
   },

@@ -43,6 +43,7 @@ model User {
   coins               Int @default(0)
   dailyStreak         Int @default(0)
   lastDailyClaim      DateTime?
+  boostedUntil        DateTime?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -68,6 +69,7 @@ model User {
   friendRequestsSent    FriendRequest[] @relation("SentFriendRequests")
   friendRequestsReceived FriendRequest[] @relation("ReceivedFriendRequests")
   notifications         Notification[]
+  coinTransactions       CoinTransaction[]
   reportsMade           Report[] @relation("ReportsMade")
   reportsReceived       Report[] @relation("ReportsReceived")
   subscription          Subscription?
@@ -317,6 +319,29 @@ model ResetToken {
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model CoinPackage {
+  id        String @id
+  name      String
+  coins     Int
+  priceUsd  Float
+  bonus     Int    @default(0)
+  popular   Boolean @default(false)
+  createdAt DateTime @default(now())
+}
+
+model CoinTransaction {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount       Int
+  reason       String
+  refId        String?
+  balanceAfter Int
+  createdAt    DateTime @default(now())
 
   @@index([userId])
 }

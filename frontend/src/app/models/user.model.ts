@@ -209,6 +209,25 @@ export interface SubscriptionInfo {
   isActive: boolean;
 }
 
+export interface CoinPackage {
+  id: string;
+  name: string;
+  coins: number;
+  priceUsd: number;
+  bonus: number;
+  popular: boolean;
+}
+
+export interface CoinTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  reason: string;
+  refId?: string;
+  balanceAfter: number;
+  createdAt: string;
+}
+
 export interface DashboardStats {
   coins: number;
   dailyStreak: number;

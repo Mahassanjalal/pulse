@@ -4,6 +4,7 @@ import { withRealCounts } from '../lib/user';
 import { getFriendIds } from '../lib/relations';
 import { UpdateProfileSchema, UpdatePreferencesSchema, UpdatePrivacySettingsSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
+import { adjustCoins } from '../lib/coins';
 
 export default async function userRoutes(app: FastifyInstance) {
   app.get('/:id', async (req, reply) => {
@@ -264,16 +265,14 @@ export default async function userRoutes(app: FastifyInstance) {
     const isConsecutive = lastClaimDay && (today.getTime() - lastClaimDay.getTime()) === 86400000;
     const newStreak = isConsecutive ? user.dailyStreak + 1 : 1;
 
+    const balance = await adjustCoins(authUser.id, REWARD_COINS, 'DAILY_REWARD');
+
     await prisma.user.update({
       where: { id: authUser.id },
-      data: {
-        coins: { increment: REWARD_COINS },
-        dailyStreak: newStreak,
-        lastDailyClaim: now,
-      },
+      data: { dailyStreak: newStreak, lastDailyClaim: now },
     });
 
-    return { coins: user.coins + REWARD_COINS, dailyStreak: newStreak };
+    return { coins: balance, dailyStreak: newStreak };
   });
 
   // GET /me/visitors - Profile visitors

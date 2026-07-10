@@ -10,6 +10,7 @@ export interface AuthUser {
   isVerified: boolean;
   isLocked: boolean;
   role: 'USER' | 'ADMIN' | 'MODERATOR';
+  coins: number;
 }
 
 export function getAuthUser(req: FastifyRequest): AuthUser | undefined {

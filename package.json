@@ -1,0 +1,13 @@
+{
+  "name": "pulse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pulse — root build orchestrator for backend (Fastify/Prisma) + frontend (Angular SPA).",
+  "scripts": {
+    "build": "npm --prefix backend install && npm --prefix backend run generate && npm --prefix frontend install && npm --prefix frontend run build -- --configuration production && npm --prefix backend run build && node scripts/copy-frontend.js",
+    "start": "npm --prefix backend start"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

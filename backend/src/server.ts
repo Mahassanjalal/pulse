@@ -1,9 +1,12 @@
 import 'dotenv/config';
+import path from 'path';
+import fs from 'fs';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwtPlugin from '@fastify/jwt';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import staticPlugin from '@fastify/static';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { prisma } from './lib/prisma';
@@ -73,6 +76,26 @@ async function start() {
   });
 
   await registerRoutes(app);
+
+  // In production the Angular SPA is built into backend/public and served from
+  // the same origin as the API (so environment.prod.ts apiUrl '/api/v1' and the
+  // socket wsUrl derived from window.location both work without extra config).
+  const publicDir = path.join(__dirname, '..', 'public');
+  if (fs.existsSync(publicDir)) {
+    await app.register(staticPlugin, {
+      root: publicDir,
+      prefix: '/',
+      wildcard: false,
+    });
+
+    app.setNotFoundHandler((req, reply) => {
+      const url = req.raw.url || '';
+      if (url.startsWith('/api') || url.startsWith('/docs')) {
+        return reply.status(404).send({ error: 'Not found' });
+      }
+      return reply.sendFile('index.html');
+    });
+  }
 
   // Stripe webhook: must read the raw request body to verify the signature.
   // The raw bytes are captured by the application/json content-type parser

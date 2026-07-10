@@ -8,6 +8,9 @@ dist/
 **/dist/
 build/
 
+# Generated SPA served by backend in production
+backend/public/
+
 # Angular
 frontend/.angular/
 

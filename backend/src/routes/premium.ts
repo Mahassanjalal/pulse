@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma';
 import { authenticate, getAuthUser } from '../middleware/auth';
 import { stripe, isStripeConfigured } from '../lib/stripe';
 import { unlockAccount } from '../lib/moderation';
+import { adjustCoins } from '../lib/coins';
+import { resolveCoinPackage } from './coins';
 
 const PLANS = [
   {
@@ -235,6 +237,11 @@ export async function handleStripeWebhook(req: any, reply: any): Promise<void> {
     // Account-unlock payment ($10) also lands here with purpose: UNLOCK.
     if (userId && session.metadata?.purpose === 'UNLOCK') {
       await unlockAccount(userId);
+    }
+    // Coin purchases land here with purpose: COINS.
+    if (userId && session.metadata?.purpose === 'COINS') {
+      const pkg = resolveCoinPackage(session.metadata?.packageId);
+      if (pkg) await adjustCoins(userId, pkg.coins + pkg.bonus, 'PURCHASE', pkg.id);
     }
   }
 

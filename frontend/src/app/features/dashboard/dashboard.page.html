@@ -126,6 +126,21 @@
         <p *ngIf="claimError" class="text-error text-label-sm text-center" role="alert">{{ claimError }}</p>
       </div>
 
+      <!-- Get Gems -->
+      <div class="glass-panel p-lg rounded-2xl border border-white/10 space-y-md">
+        <h3 class="font-headline text-headline-md text-on-surface flex items-center gap-sm">
+          <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">account_balance_wallet</span>
+          Your Gems
+        </h3>
+        <div class="flex items-center justify-between bg-surface/40 p-md rounded-xl border border-white/5">
+          <p class="font-headline text-headline-md text-primary">{{ stats?.coins || 0 }}</p>
+          <span class="text-xs text-on-surface-variant">available</span>
+        </div>
+        <a routerLink="/coins" class="w-full inline-flex items-center justify-center gap-sm bg-primary text-on-primary py-sm rounded-xl font-label text-label-md neon-glow-primary hover:brightness-110 active:scale-95 transition-all" aria-label="Buy gems">
+          <span class="material-symbols-outlined text-sm">add</span> Buy Gems
+        </a>
+      </div>
+
       <!-- Quick Friends -->
       <div class="glass-panel p-lg rounded-2xl border border-white/10 space-y-md">
         <h3 class="font-headline text-headline-md text-on-surface">Quick Friends</h3>
