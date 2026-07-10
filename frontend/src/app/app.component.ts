@@ -104,7 +104,7 @@ export class AppComponent {
     private router: Router,
     private premiumModalService: PremiumModalService,
     private socketService: SocketService,
-    private callService: CallService,
+    public callService: CallService,
     private callSoundService: CallSoundService
   ) {
     this.router.events.pipe(
