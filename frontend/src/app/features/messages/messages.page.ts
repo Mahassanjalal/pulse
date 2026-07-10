@@ -202,6 +202,15 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   startConversationWith(friendId: string): void {
     this.showFriendPicker = false;
+    // Reuse an existing conversation with this friend instead of always
+    // POSTing a new one — otherwise repeated triggers (friend picker, the
+    // ?userId deep link, or post-call flows) create duplicate threads.
+    const existing = this.conversations.find(c => c.peer.id === friendId);
+    if (existing) {
+      this.router.navigate([], { queryParams: {}, replaceUrl: true });
+      this.selectConversation(existing.id);
+      return;
+    }
     this.chatService.startConversation(friendId).subscribe({
       next: (res) => {
         this.chatService.loadConversations();

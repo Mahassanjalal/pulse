@@ -1,0 +1,78 @@
+<div #panel class="fixed z-[90] w-[320px] select-none" [class.pointer-events-none]="isDragging"
+     [ngStyle]="panelStyle" *ngIf="active">
+
+  <!-- Minimized pill -->
+  <div *ngIf="minimized"
+       class="flex items-center gap-sm glass-panel border border-white/10 rounded-full px-md py-sm shadow-2xl cursor-pointer"
+       (click)="toggleMinimize()">
+    <span class="w-2.5 h-2.5 rounded-full bg-tertiary pulse-animation"></span>
+    <span class="font-label text-label-sm text-on-surface truncate max-w-[120px]">
+      {{ active.calleeName || 'Friend' }}
+    </span>
+    <span class="font-label text-label-xs text-on-surface-variant tabular-nums">{{ callTimer }}</span>
+    <span class="material-symbols-outlined text-on-surface-variant text-base">expand_less</span>
+  </div>
+
+  <!-- Full widget -->
+  <div *ngIf="!minimized"
+       class="glass-panel rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
+    <!-- Header (drag handle) -->
+    <div class="flex items-center justify-between px-md py-sm bg-white/5 cursor-grab active:cursor-grabbing"
+         (pointerdown)="onDragStart($event)">
+      <div class="flex items-center gap-xs min-w-0">
+        <span class="w-2 h-2 rounded-full"
+              [ngClass]="callStage === 'live' ? 'bg-tertiary' : 'bg-yellow-400 pulse-animation'"></span>
+        <span class="font-label text-label-sm text-on-surface truncate">
+          {{ callStage === 'live' ? 'On call' : 'Connecting…' }}
+        </span>
+        <span class="font-label text-label-xs text-on-surface-variant tabular-nums">{{ callTimer }}</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <button type="button" (click)="toggleMinimize()"
+                class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-white/10 hover:text-on-surface transition-all">
+          <span class="material-symbols-outlined text-base">remove</span>
+        </button>
+        <button type="button" (click)="hangUp()"
+                class="w-7 h-7 rounded-full flex items-center justify-center text-error hover:bg-error/20 transition-all">
+          <span class="material-symbols-outlined text-base">close</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Video area -->
+    <div class="relative w-full aspect-video bg-black/60">
+      <video #remoteVideo class="w-full h-full object-cover" style="transform: scaleX(-1);" autoplay playsinline></video>
+
+      <!-- Self PiP (mirrored like a mirror so it feels natural) -->
+      <div class="absolute bottom-2 right-2 w-20 aspect-video rounded-lg overflow-hidden border border-white/20 bg-black/80 shadow-lg">
+        <video #localVideo class="w-full h-full object-cover" style="transform: scaleX(-1);" autoplay playsinline muted></video>
+        <div *ngIf="isCameraOff" class="absolute inset-0 flex items-center justify-center bg-surface-container">
+          <span class="material-symbols-outlined text-on-surface-variant text-lg">videocam_off</span>
+        </div>
+      </div>
+
+      <div *ngIf="isMuted"
+           class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-error/30 border border-error/40">
+        <span class="material-symbols-outlined text-error text-sm">mic_off</span>
+      </div>
+    </div>
+
+    <!-- Controls (video + audio only) -->
+    <div class="flex items-center justify-center gap-lg py-md bg-white/5">
+      <button type="button" (click)="toggleMute()"
+              class="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-95"
+              [ngClass]="isMuted ? 'bg-error/20 border border-error/40 text-error' : 'bg-white/10 text-on-surface hover:bg-white/20'">
+        <span class="material-symbols-outlined">{{ isMuted ? 'mic_off' : 'mic' }}</span>
+      </button>
+      <button type="button" (click)="toggleCamera()"
+              class="w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-95"
+              [ngClass]="isCameraOff ? 'bg-error/20 border border-error/40 text-error' : 'bg-white/10 text-on-surface hover:bg-white/20'">
+        <span class="material-symbols-outlined">{{ isCameraOff ? 'videocam_off' : 'videocam' }}</span>
+      </button>
+      <button type="button" (click)="hangUp()"
+              class="w-12 h-12 rounded-full bg-error text-white flex items-center justify-center hover:brightness-110 transition-all active:scale-95">
+        <span class="material-symbols-outlined">call_end</span>
+      </button>
+    </div>
+  </div>
+</div>

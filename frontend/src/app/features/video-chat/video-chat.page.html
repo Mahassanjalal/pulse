@@ -104,7 +104,7 @@
 
         <!-- Skip / End -->
         <div class="flex items-center gap-md">
-          <button *ngIf="status === 'matched'" (click)="skipMatch()" type="button" class="px-xl py-md bg-primary text-on-primary rounded-full font-headline text-headline-md flex items-center gap-sm neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
+          <button *ngIf="status === 'matched' && !isDirectCall" (click)="skipMatch()" type="button" class="px-xl py-md bg-primary text-on-primary rounded-full font-headline text-headline-md flex items-center gap-sm neon-glow-primary hover:brightness-110 active:scale-95 transition-all">
             <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">skip_next</span>
             Next Match
           </button>

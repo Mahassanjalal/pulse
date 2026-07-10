@@ -4,6 +4,7 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { CoreModule } from './core/core.module';
 import { ShellModule } from './shell/shell.module';
+import { SharedModule } from './shared/shared.module';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { AuthInterceptor } from './core/interceptors/auth.interceptor';
@@ -17,6 +18,7 @@ import { PremiumModalComponent } from './shared/components/premium-modal/premium
     HttpClientModule,
     CoreModule,
     ShellModule,
+    SharedModule,
     AppRoutingModule,
     PremiumModalComponent
   ],

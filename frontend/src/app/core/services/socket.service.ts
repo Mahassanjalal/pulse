@@ -184,4 +184,8 @@ export class SocketService implements OnDestroy {
   cancelCall(callId: string): void {
     this.emit('cancel_call', { callId });
   }
+
+  endDirectCall(matchId: string): void {
+    this.emit('end_direct_call', { matchId });
+  }
 }

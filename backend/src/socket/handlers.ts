@@ -491,13 +491,34 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const timer = pendingCallTimers.get(data.callId);
       if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
 
-      const match = await prisma.match.create({
-        data: {
-          user1Id: pending.callerId,
-          user2Id: pending.calleeId,
-          status: 'ACTIVE',
+      // Reuse an existing conversation (ENDED match) between these two friends
+      // instead of always creating a new one — otherwise every call spawns a
+      // duplicate thread with the same user. Only create a fresh match when
+      // none exists yet.
+      let match = await prisma.match.findFirst({
+        where: {
+          OR: [
+            { user1Id: pending.callerId, user2Id: pending.calleeId },
+            { user1Id: pending.calleeId, user2Id: pending.callerId },
+          ],
         },
+        orderBy: { createdAt: 'desc' },
       });
+      if (!match) {
+        match = await prisma.match.create({
+          data: {
+            user1Id: pending.callerId,
+            user2Id: pending.calleeId,
+            status: 'ACTIVE',
+          },
+        });
+      } else {
+        // Reactivate the reused conversation for the duration of the call.
+        match = await prisma.match.update({
+          where: { id: match.id },
+          data: { status: 'ACTIVE' },
+        });
+      }
       activeMatches.set(match.id, {
         user1: pending.callerId,
         user2: pending.calleeId,
@@ -547,6 +568,43 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const timer = pendingCallTimers.get(data.callId);
       if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
       io.to(`user_${pending.calleeId}`).emit('call_cancelled', { callId: data.callId });
+    });
+
+    // End an ACTIVE direct (friend) call and tear down its match, mirroring the
+    // end_match logic. The widget tracks the matchId locally and emits this on
+    // hang-up — otherwise the activeMatches entry leaks and the next call fails
+    // with "You are already in a call".
+    socket.on('end_direct_call', async (data: { matchId: string }) => {
+      const match = activeMatches.get(data.matchId);
+      if (!match) return;
+
+      const duration = Math.floor((Date.now() - match.startTime) / 1000);
+
+      await prisma.match.update({
+        where: { id: data.matchId },
+        data: { status: 'ENDED', endTime: new Date(), duration },
+      });
+
+      const otherUserId = getPeerId(match, userId);
+      activeMatches.delete(data.matchId);
+
+      await Promise.all([
+        prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
+        prisma.user.update({ where: { id: otherUserId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
+      ]);
+
+      const [me, peer] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId }, select: { totalConversations: true } }),
+        prisma.user.findUnique({ where: { id: otherUserId }, select: { totalConversations: true } }),
+      ]);
+      if (me) await unlockConversationAchievements(userId, me.totalConversations);
+      if (peer) await unlockConversationAchievements(otherUserId, peer.totalConversations);
+
+      io.to(`user_${otherUserId}`).emit('match_ended', { matchId: data.matchId, reason: 'ended' });
+      socket.emit('match_ended', { matchId: data.matchId, reason: 'ended' });
+
+      const peerUser = await prisma.user.findUnique({ where: { id: otherUserId }, select: { displayName: true } });
+      await NotificationService.matchEnded(otherUserId, peerUser?.displayName || 'Someone');
     });
 
     // ======================================

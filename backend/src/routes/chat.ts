@@ -87,7 +87,8 @@ export default async function chatRoutes(app: FastifyInstance) {
 
     let match = await prisma.match.findFirst({
       where: {
-        status: 'ENDED',
+        // Match ANY status so an in-flight (ACTIVE) call thread or a ended
+        // one both resolve to the same single conversation for this pair.
         OR: [
           { user1Id: userId, user2Id: friendId },
           { user1Id: friendId, user2Id: userId },

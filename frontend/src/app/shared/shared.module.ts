@@ -5,9 +5,10 @@ import { FormsModule } from '@angular/forms';
 import { PlanListComponent } from '@shared/components/plan-list/plan-list.component';
 import { ShaderBgDirective } from '@shared/directives/shader-bg.directive';
 import { ParticlesBgDirective } from '@shared/directives/particles-bg.directive';
-
+import { FriendCallWidgetComponent } from './components/friend-call-widget/friend-call-widget.component';
 const sharedComponents = [
-  PlanListComponent
+  PlanListComponent,
+  FriendCallWidgetComponent
 ];
 
 @NgModule({

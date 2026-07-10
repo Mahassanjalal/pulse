@@ -6,6 +6,7 @@ import { PremiumModalService } from '../../core/services/premium-modal.service';
 import { SocketService } from '../../core/services/socket.service';
 import { CallService } from '../../core/services/call.service';
 import { CallSoundService } from '../../core/services/call-sound.service';
+import { WebRTCService } from '../../core/services/webRTC.service';
 import { Friend, FriendRequestItem } from '@models/user.model';
 import { Subject, debounceTime, distinctUntilChanged, Subscription } from 'rxjs';
 
@@ -32,7 +33,8 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
     private premiumModalService: PremiumModalService,
     private socketService: SocketService,
     private callService: CallService,
-    private callSoundService: CallSoundService
+    private callSoundService: CallSoundService,
+    private webRTCService: WebRTCService
   ) {}
 
   ngOnInit(): void {
@@ -133,8 +135,11 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
   }
 
   callFriend(friend: Friend): void {
-    // Unlock audio on the user gesture so the ringtone can play for the callee.
+    // Unlock audio + acquire the camera/mic INSIDE the click gesture so the
+    // browser allows getUserMedia. The widget later runs the WebRTC signaling
+    // (createPeerConnection/offer) when match_found arrives.
     this.callSoundService.unlock();
+    this.webRTCService.init();
     this.socketService.callFriend(friend.peer.id);
     // Show a 'calling...' overlay; the server replies with call_initiated
     // (confirms) or call_error (busy/offline/not friends) which clears it.

@@ -111,6 +111,15 @@ export class WebRTCService {
   }
 
   async init(): Promise<void> {
+    // Idempotent: if we already have a local stream, just re-emit it. This
+    // matters because callFriend/acceptIncomingCall init() inside the click
+    // gesture, and the widget's match_found handler also calls init() — we must
+    // not re-fetch (which would replace the stream the peer connection already
+    // attached tracks from) or leave localStream null on the second call.
+    if (this.localStream) {
+      this.localStreamSubject.next(this.localStream);
+      return;
+    }
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: true,

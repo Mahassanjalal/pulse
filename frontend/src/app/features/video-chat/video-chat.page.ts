@@ -4,6 +4,7 @@ import { Subscription } from 'rxjs';
 import { MatchingService, MatchData } from '../../core/services/matching.service';
 import { WebRTCService } from '../../core/services/webRTC.service';
 import { SocketService } from '../../core/services/socket.service';
+import { CallService } from '../../core/services/call.service';
 
 @Component({
   selector: 'pulse-video-chat',
@@ -35,11 +36,19 @@ export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit 
   private toastTimeout: any = null;
   private subscriptions: Subscription[] = [];
 
+  /** True when the live match is a direct friend call (CallService active).
+   *  Direct calls are owned by the floating widget, so the /video room must
+   *  not expose Next/Skip — those would wrongly drop a friend call. */
+  get isDirectCall(): boolean {
+    return !!this.callService.current;
+  }
+
   constructor(
     public matchingService: MatchingService,
     private webRTCService: WebRTCService,
     private socketService: SocketService,
-    private router: Router
+    private router: Router,
+    private callService: CallService
   ) {}
 
   ngOnInit(): void {
