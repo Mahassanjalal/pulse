@@ -1,0 +1,108 @@
+-- CreateTable
+CREATE TABLE "OtpCode" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "purpose" TEXT NOT NULL DEFAULT 'LOGIN',
+    "expiresAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "OtpCode_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "ResetToken" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expiresAt" DATETIME NOT NULL,
+    "used" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "CoinPackage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "coins" INTEGER NOT NULL,
+    "priceUsd" REAL NOT NULL,
+    "bonus" INTEGER NOT NULL DEFAULT 0,
+    "popular" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "CoinTransaction" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "amount" INTEGER NOT NULL,
+    "reason" TEXT NOT NULL,
+    "refId" TEXT,
+    "balanceAfter" INTEGER NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CoinTransaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- RedefineTables
+PRAGMA defer_foreign_keys=ON;
+PRAGMA foreign_keys=OFF;
+CREATE TABLE "new_User" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "email" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "username" TEXT NOT NULL,
+    "displayName" TEXT,
+    "phone" TEXT,
+    "age" INTEGER,
+    "gender" TEXT,
+    "bio" TEXT,
+    "country" TEXT,
+    "languages" TEXT NOT NULL DEFAULT '[]',
+    "interests" TEXT NOT NULL DEFAULT '[]',
+    "profilePicture" TEXT,
+    "coverImage" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'OFFLINE',
+    "lastSeen" DATETIME,
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
+    "isPremium" BOOLEAN NOT NULL DEFAULT false,
+    "isGuest" BOOLEAN NOT NULL DEFAULT false,
+    "googleId" TEXT,
+    "authProvider" TEXT NOT NULL DEFAULT 'EMAIL',
+    "premiumUntil" DATETIME,
+    "friendsCount" INTEGER NOT NULL DEFAULT 0,
+    "totalConversations" INTEGER NOT NULL DEFAULT 0,
+    "trustScore" INTEGER NOT NULL DEFAULT 50,
+    "verificationLevel" INTEGER NOT NULL DEFAULT 0,
+    "communityRating" REAL NOT NULL DEFAULT 0,
+    "coins" INTEGER NOT NULL DEFAULT 0,
+    "dailyStreak" INTEGER NOT NULL DEFAULT 0,
+    "lastDailyClaim" DATETIME,
+    "boostedUntil" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "role" TEXT NOT NULL DEFAULT 'USER',
+    "isLocked" BOOLEAN NOT NULL DEFAULT false,
+    "lockReason" TEXT,
+    "lockUnlockedAt" DATETIME
+);
+INSERT INTO "new_User" ("age", "authProvider", "bio", "coins", "communityRating", "country", "coverImage", "createdAt", "dailyStreak", "displayName", "email", "friendsCount", "gender", "googleId", "id", "interests", "isGuest", "isPremium", "isVerified", "languages", "lastDailyClaim", "lastSeen", "password", "premiumUntil", "profilePicture", "role", "status", "totalConversations", "trustScore", "updatedAt", "username", "verificationLevel") SELECT "age", "authProvider", "bio", "coins", "communityRating", "country", "coverImage", "createdAt", "dailyStreak", "displayName", "email", "friendsCount", "gender", "googleId", "id", "interests", "isGuest", "isPremium", "isVerified", "languages", "lastDailyClaim", "lastSeen", "password", "premiumUntil", "profilePicture", "role", "status", "totalConversations", "trustScore", "updatedAt", "username", "verificationLevel" FROM "User";
+DROP TABLE "User";
+ALTER TABLE "new_User" RENAME TO "User";
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+CREATE UNIQUE INDEX "User_phone_key" ON "User"("phone");
+CREATE UNIQUE INDEX "User_googleId_key" ON "User"("googleId");
+PRAGMA foreign_keys=ON;
+PRAGMA defer_foreign_keys=OFF;
+
+-- CreateIndex
+CREATE INDEX "OtpCode_userId_idx" ON "OtpCode"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ResetToken_token_key" ON "ResetToken"("token");
+
+-- CreateIndex
+CREATE INDEX "ResetToken_userId_idx" ON "ResetToken"("userId");
+
+-- CreateIndex
+CREATE INDEX "CoinTransaction_userId_idx" ON "CoinTransaction"("userId");
