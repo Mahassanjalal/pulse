@@ -157,6 +157,14 @@ export class AuthService {
     this.currentUser$.next(null);
   }
 
+  // Clears the session locally without calling the API — used by the auth
+  // interceptor when a refresh fails, to avoid re-entering the interceptor.
+  forceLogout(): void {
+    this.socketService.disconnect();
+    this.clearTokens();
+    this.currentUser$.next(null);
+  }
+
   getCurrentUser(): User | null {
     return this.currentUser$.value;
   }
@@ -185,7 +193,15 @@ export class AuthService {
     return this.http.get<{ user: User }>(`${environment.apiUrl}/auth/me`).pipe(
       tap({
         next: (res) => {
-          this.currentUser$.next(res.user);
+          const user = res.user as any;
+          // Backend stores interests/languages as JSON strings; normalize to arrays.
+          if (typeof user.interests === 'string') {
+            try { user.interests = JSON.parse(user.interests || '[]'); } catch { user.interests = []; }
+          }
+          if (typeof user.languages === 'string') {
+            try { user.languages = JSON.parse(user.languages || '[]'); } catch { user.languages = []; }
+          }
+          this.currentUser$.next(user as User);
           localStorage.setItem(this.userIdKey, res.user.id);
         },
         error: () => {

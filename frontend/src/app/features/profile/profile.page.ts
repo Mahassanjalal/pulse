@@ -24,6 +24,7 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
   interests: string[] = [];
   relationship: string = 'NONE';
   friendId: string | null = null;
+  receivedRequestId: string | null = null;
   isLoading = true;
   liveStatus = 'OFFLINE';
   private presenceSub: Subscription | null = null;
@@ -151,6 +152,14 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.relationship = res.relationship;
         this.friendId = res.friendId;
+        if (res.relationship === 'REQUEST_RECEIVED') {
+          // Resolve the actual friend-request id so we can accept it.
+          this.friendService.loadRequests();
+          this.friendService.receivedRequestsObs.subscribe(reqs => {
+            const req = reqs.find(r => r.fromUser?.id === userId);
+            this.receivedRequestId = req?.id || null;
+          });
+        }
       },
       error: () => {}
     });
@@ -247,6 +256,24 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
           this.showToast('Failed to send friend request');
         }
       }
+    });
+  }
+
+  acceptFriendRequest(): void {
+    if (!this.user) return;
+    if (!this.receivedRequestId) {
+      // Fallback: treat as a fresh request if the id couldn't be resolved.
+      this.sendFriendRequest();
+      return;
+    }
+    this.friendService.acceptRequest(this.receivedRequestId).subscribe({
+      next: () => {
+        this.relationship = 'FRIENDS';
+        this.receivedRequestId = null;
+        this.friendService.loadFriends();
+        this.showToast('Friend request accepted');
+      },
+      error: () => this.showToast('Failed to accept request')
     });
   }
 

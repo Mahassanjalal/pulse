@@ -91,6 +91,12 @@ const routes: Routes = [
     data: { layout: 'authenticated' }
   },
   {
+    path: 'admin',
+    loadChildren: () => import('./features/admin/admin.module').then(m => m.AdminModule),
+    canActivate: [AdminGuard],
+    data: { layout: 'authenticated' }
+  },
+  {
     path: '**',
     redirectTo: 'dashboard'
   }

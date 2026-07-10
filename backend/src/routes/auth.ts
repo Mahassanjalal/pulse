@@ -111,15 +111,17 @@ export default async function authRoutes(app: FastifyInstance) {
         id: user.id,
         email: user.email,
         username: user.username,
-        displayName: user.displayName || displayName,
+        displayName: user.displayName,
         profilePicture: user.profilePicture || profilePicture,
         isPremium: user.isPremium || false,
         isVerified: user.isVerified || false,
+        role: user.role,
       },
       token,
       refreshToken,
     };
   });
+
 
   // POST /api/v1/auth/register
   app.post('/register', async (req, reply) => {
@@ -157,6 +159,7 @@ export default async function authRoutes(app: FastifyInstance) {
         displayName: true,
         isPremium: true,
         isVerified: true,
+        role: true,
       },
     });
     
@@ -231,6 +234,7 @@ export default async function authRoutes(app: FastifyInstance) {
         displayName: user.displayName,
         isPremium: user.isPremium,
         isVerified: user.isVerified,
+        role: user.role,
       },
       token,
       refreshToken,
@@ -304,6 +308,7 @@ export default async function authRoutes(app: FastifyInstance) {
         coverImage: true,
         isVerified: true,
         isPremium: true,
+        role: true,
         status: true,
         trustScore: true,
         verificationLevel: true,

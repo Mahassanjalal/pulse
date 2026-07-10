@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, filter, take, switchMap } from 'rxjs/operators';
+import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
 @Injectable()
@@ -35,41 +36,42 @@ export class AuthInterceptor implements HttpInterceptor {
   }
 
   private handle401Error(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    // No refresh token (e.g. guest, expired session) -> kill the session.
+    if (!localStorage.getItem('refreshToken')) {
+      this.authService.forceLogout();
+      this.router.navigate(['/login']);
+      return throwError(() => new HttpErrorResponse({ status: 401 }));
+    }
+
     if (!this.isRefreshing) {
       this.isRefreshing = true;
-      this.refreshTokenSubject.next(null);
+      // Fresh subject per cycle so a previous error can't poison future refreshes.
+      this.refreshTokenSubject = new BehaviorSubject<string | null>(null);
 
-      return new Observable<HttpEvent<any>>(observer => {
-        (async () => {
-          try {
-            const newToken = await (this as any).authService.refreshToken();
-            if (newToken) {
-              this.refreshTokenSubject.next(newToken);
-              const cloned = this.addToken(request, newToken);
-              next.handle(cloned).subscribe(observer);
-            } else {
-              this.refreshTokenSubject.error('Token refresh failed');
-              observer.error(new HttpErrorResponse({ status: 401 }));
-            }
-          } catch {
-            this.refreshTokenSubject.error('Token refresh failed');
-            observer.error(new HttpErrorResponse({ status: 401 }));
-          } finally {
-            this.isRefreshing = false;
+      (async () => {
+        try {
+          const newToken = await this.authService.refreshToken();
+          if (newToken) {
+            this.refreshTokenSubject.next(newToken);
+          } else {
+            throw new Error('refresh failed');
           }
-        })();
-      });
+        } catch {
+          this.authService.forceLogout();
+          this.router.navigate(['/login']);
+          this.refreshTokenSubject.error('Token refresh failed');
+        } finally {
+          this.isRefreshing = false;
+        }
+      })();
     }
 
     return this.refreshTokenSubject.pipe(
       filter(token => token !== null),
       take(1),
-      switchMap(token => {
-        const cloned = this.addToken(request, token!);
-        return next.handle(cloned);
-      })
+      switchMap(token => next.handle(this.addToken(request, token!)))
     );
   }
 
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService, private router: Router) {}
 }

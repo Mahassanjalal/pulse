@@ -74,7 +74,10 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
   }
 
   get filteredFriends(): Friend[] {
-    return this.allFriends;
+    // Exclude online friends here since they're already shown in the
+    // "Online Now" section above (avoids listing them twice).
+    const onlineIds = new Set(this.onlineFriends.map(f => f.friendId));
+    return this.allFriends.filter(f => !onlineIds.has(f.friendId));
   }
 
   private showToast(msg: string): void {

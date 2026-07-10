@@ -50,20 +50,20 @@ jobs:
       #   env:
       #     CI: "true"
 
-  deploy:
-    name: Deploy to Railway
-    needs: [backend, frontend]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
-      - name: Deploy
-        run: railway up --detach --service pulse
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+  # deploy:
+  #   name: Deploy to Railway
+  #   needs: [backend, frontend]
+  #   if : github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 18
+  #     - name: Install Railway CLI
+  #       run: npm i -g @railway/cli
+  #     - name: Deploy
+  #       run: railway up --detach --service pulse
+  #       env:
+  #         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  #         RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}

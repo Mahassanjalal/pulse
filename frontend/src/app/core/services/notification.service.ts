@@ -45,7 +45,12 @@ export class NotificationService {
       next: (res) => {
         this._currentPage = page;
         this._hasMore = res.hasMore;
-        const mapped = res.notifications.map(n => ({ ...n, timestamp: new Date(n.timestamp) }));
+        const mapped = res.notifications.map(n => ({
+          ...n,
+          unread: !(n as any).read,
+          timestamp: new Date((n as any).createdAt || (n as any).timestamp),
+          data: (n as any).data ? JSON.parse((n as any).data) : undefined,
+        }));
         if (page === 1) {
           this._allNotifications = mapped;
         } else {

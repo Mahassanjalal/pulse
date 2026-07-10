@@ -230,11 +230,11 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           const [peer1, peer2] = await Promise.all([
             prisma.user.findUnique({
               where: { id: waitingUserId },
-              select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, isVerified: true, isPremium: true },
+              select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, status: true, isVerified: true, isPremium: true },
             }),
             prisma.user.findUnique({
               where: { id: userId },
-              select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, isVerified: true, isPremium: true },
+              select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, status: true, isVerified: true, isPremium: true },
             }),
           ]);
 
@@ -265,6 +265,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
               age: peer2.age,
               country: peer2.country,
               interests: peer2Interests,
+              gender: peer2.gender,
+              status: peer2.status,
               isVerified: peer2.isVerified,
               isPremium: peer2.isPremium,
             },
@@ -280,6 +282,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
               age: peer1.age,
               country: peer1.country,
               interests: peer1Interests,
+              gender: peer1.gender,
+              status: peer1.status,
               isVerified: peer1.isVerified,
               isPremium: peer1.isPremium,
             },

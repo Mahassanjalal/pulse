@@ -149,8 +149,18 @@ export class SettingsPageComponent implements OnInit {
     if (this.editAge !== null) data.age = this.editAge;
     if (this.editGender) data.gender = this.editGender;
     if (this.editCountry) data.country = this.editCountry;
-    if (this.editLanguages) data.languages = this.editLanguages;
-    if (this.editInterests) data.interests = this.editInterests;
+    if (this.editLanguages) {
+      const langs = Array.isArray(this.editLanguages)
+        ? this.editLanguages
+        : this.editLanguages.split(',').map((s: string) => s.trim()).filter(Boolean);
+      data.languages = JSON.stringify(langs);
+    }
+    if (this.editInterests) {
+      const ints = Array.isArray(this.editInterests)
+        ? this.editInterests
+        : this.editInterests.split(',').map((s: string) => s.trim()).filter(Boolean);
+      data.interests = JSON.stringify(ints);
+    }
     if (this.profilePicture) data.profilePicture = this.profilePicture;
     if (this.coverImage) data.coverImage = this.coverImage;
 

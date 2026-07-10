@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { environment } from '@env/environment';
 import { PresenceService } from './presence.service';
+import { SocketService } from './socket.service';
 import { Friend, FriendRequestItem } from '@models/user.model';
 
 @Injectable({
@@ -14,7 +15,7 @@ export class FriendService implements OnDestroy {
   private sentRequests$ = new BehaviorSubject<FriendRequestItem[]>([]);
   private presenceSub: Subscription;
 
-  constructor(private http: HttpClient, private presenceService: PresenceService) {
+  constructor(private http: HttpClient, private presenceService: PresenceService, private socketService: SocketService) {
     this.presenceSub = this.presenceService.onPresenceChanged$.subscribe(({ userId, status }) => {
       const current = this.friends$.value;
       let changed = false;
@@ -28,6 +29,17 @@ export class FriendService implements OnDestroy {
       if (changed) {
         this.friends$.next(updated);
       }
+    });
+
+    // Realtime: refresh requests/friends when a friend-related socket event arrives.
+    this.socketService.on('friend_request_received').subscribe(() => this.loadRequests());
+    this.socketService.on('friend_request_accepted').subscribe(() => {
+      this.loadRequests();
+      this.loadFriends();
+    });
+    this.socketService.on('friend_added').subscribe(() => {
+      this.loadRequests();
+      this.loadFriends();
     });
   }
 

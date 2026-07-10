@@ -40,7 +40,7 @@ export class SocketService implements OnDestroy {
     this.socket.on('reconnect_attempt', () => this.connectionState$.next('reconnecting'));
 
     const events = [
-      'match_found', 'match_skipped', 'match_ended', 'matching', 'matching_queue', 'matching_cancelled',
+      'match_found', 'match_skipped', 'match_ended', 'matching_queue', 'matching_cancelled',
       'webrtc_offer', 'webrtc_answer', 'webrtc_candidate',
       'match_message', 'match_message_sent', 'peer_typing',
       'friend_request_notification', 'friend_request_received', 'friend_request_accepted', 'friend_added',
