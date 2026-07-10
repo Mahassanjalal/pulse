@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { FastifyInstance } from 'fastify';
+import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../lib/prisma';
 import { NotificationService, isBlocked } from '../lib/notifications';
 import { getPeerId, findFriendRequest } from '../lib/relations';
@@ -20,6 +21,7 @@ interface SocketAuth extends Socket {
 
 const waitingUsers = new Map<string, { socketId: string; filters?: any }>();
 const activeMatches = new Map<string, { user1: string; user2: string; matchId: string; startTime: number }>();
+const pendingCalls = new Map<string, { callerId: string; calleeId: string }>();
 
 // Multi-tab connection tracking: userId -> Set<socketId>
 const userConnections = new Map<string, Set<string>>();
@@ -27,6 +29,39 @@ const userConnections = new Map<string, Set<string>>();
 const heartbeatTimers = new Map<string, NodeJS.Timeout>();
 
 const HEARTBEAT_TIMEOUT = 90000; // 90s without heartbeat -> disconnect
+
+const peerSelect = {
+  id: true,
+  username: true,
+  displayName: true,
+  age: true,
+  country: true,
+  interests: true,
+  profilePicture: true,
+  gender: true,
+  isVerified: true,
+  isPremium: true,
+};
+
+function isUserInMatch(userId: string): boolean {
+  for (const m of activeMatches.values()) {
+    if (m.user1 === userId || m.user2 === userId) return true;
+  }
+  return false;
+}
+
+function toPeer(user: any, interests: string[]) {
+  return {
+    id: user.id,
+    displayName: user.displayName,
+    profilePicture: user.profilePicture,
+    age: user.age,
+    country: user.country,
+    interests,
+    isVerified: user.isVerified,
+    isPremium: user.isPremium,
+  };
+}
 
 async function broadcastPresence(io: Server, userId: string, status: string, lastSeen: Date): Promise<void> {
   try {
@@ -222,6 +257,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
           io.to(waitingData.socketId).emit('match_found', {
             matchId: match.id,
+            isInitiator: match.user1Id === waitingUserId,
             peer: {
               id: peer2.id,
               displayName: peer2.displayName,
@@ -236,6 +272,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
           io.to(socket.id).emit('match_found', {
             matchId: match.id,
+            isInitiator: match.user1Id === userId,
             peer: {
               id: peer1.id,
               displayName: peer1.displayName,
@@ -304,6 +341,135 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         candidate: data.candidate,
         fromUserId: userId,
       });
+    });
+
+    // ======================================
+    // FRIEND CALLS (direct 1:1 video)
+    // ======================================
+
+    socket.on('call_friend', async (data: { friendId: string }) => {
+      const friendId = data?.friendId;
+      if (!friendId) {
+        socket.emit('call_error', { message: 'Invalid call request' });
+        return;
+      }
+      if (friendId === userId) {
+        socket.emit('call_error', { message: 'Cannot call yourself' });
+        return;
+      }
+      if (authSocket.isLocked) {
+        socket.emit('call_error', { message: 'Account locked. Cannot start a call.' });
+        return;
+      }
+
+      const existingFriend = await prisma.friend.findFirst({
+        where: {
+          OR: [
+            { senderId: userId, receiverId: friendId },
+            { senderId: friendId, receiverId: userId },
+          ],
+        },
+      });
+      if (!existingFriend) {
+        socket.emit('call_error', { message: 'You must be friends to call this user' });
+        return;
+      }
+      if (await isBlocked(userId, friendId)) {
+        socket.emit('call_error', { message: 'Cannot call this user' });
+        return;
+      }
+      if (isUserInMatch(userId)) {
+        socket.emit('call_error', { message: 'You are already in a call' });
+        return;
+      }
+      if (isUserInMatch(friendId)) {
+        socket.emit('call_error', { message: 'User is busy in another call' });
+        return;
+      }
+      const calleeConns = userConnections.get(friendId);
+      if (!calleeConns || calleeConns.size === 0) {
+        socket.emit('call_error', { message: 'User is offline' });
+        return;
+      }
+
+      const callId = uuidv4();
+      pendingCalls.set(callId, { callerId: userId, calleeId: friendId });
+
+      const caller = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, displayName: true, profilePicture: true },
+      });
+
+      io.to(`user_${friendId}`).emit('incoming_call', {
+        callId,
+        caller: {
+          id: caller?.id,
+          displayName: caller?.displayName,
+          profilePicture: caller?.profilePicture,
+        },
+      });
+    });
+
+    socket.on('accept_call', async (data: { callId: string }) => {
+      const pending = data?.callId ? pendingCalls.get(data.callId) : null;
+      if (!pending || pending.calleeId !== userId) {
+        socket.emit('call_error', { message: 'Call is no longer available' });
+        return;
+      }
+      pendingCalls.delete(data.callId);
+
+      const match = await prisma.match.create({
+        data: {
+          user1Id: pending.callerId,
+          user2Id: pending.calleeId,
+          status: 'ACTIVE',
+        },
+      });
+      activeMatches.set(match.id, {
+        user1: pending.callerId,
+        user2: pending.calleeId,
+        matchId: match.id,
+        startTime: Date.now(),
+      });
+
+      const [callerUser, calleeUser] = await Promise.all([
+        prisma.user.findUnique({ where: { id: pending.callerId }, select: peerSelect }),
+        prisma.user.findUnique({ where: { id: pending.calleeId }, select: peerSelect }),
+      ]);
+      if (!callerUser || !calleeUser) {
+        socket.emit('call_error', { message: 'Call failed' });
+        return;
+      }
+
+      const callerInterests: string[] = JSON.parse(callerUser.interests || '[]');
+      const calleeInterests: string[] = JSON.parse(calleeUser.interests || '[]');
+
+      io.to(`user_${pending.callerId}`).emit('match_found', {
+        matchId: match.id,
+        isInitiator: true,
+        peer: toPeer(calleeUser, calleeInterests),
+      });
+      io.to(`user_${pending.calleeId}`).emit('match_found', {
+        matchId: match.id,
+        isInitiator: false,
+        peer: toPeer(callerUser, callerInterests),
+      });
+    });
+
+    socket.on('decline_call', (data: { callId: string }) => {
+      const pending = data?.callId ? pendingCalls.get(data.callId) : null;
+      if (!pending) return;
+      if (pending.calleeId !== userId && pending.callerId !== userId) return;
+      pendingCalls.delete(data.callId);
+      io.to(`user_${pending.callerId}`).emit('call_declined', { callId: data.callId });
+    });
+
+    socket.on('cancel_call', (data: { callId: string }) => {
+      const pending = data?.callId ? pendingCalls.get(data.callId) : null;
+      if (!pending) return;
+      if (pending.callerId !== userId) return;
+      pendingCalls.delete(data.callId);
+      io.to(`user_${pending.calleeId}`).emit('call_cancelled', { callId: data.callId });
     });
 
     // ======================================

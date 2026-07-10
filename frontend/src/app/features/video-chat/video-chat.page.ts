@@ -59,7 +59,9 @@ export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit 
         this.isMuted = false;
         this.isCameraOff = false;
         await this.webRTCService.createPeerConnection(peer.matchId);
-        await this.webRTCService.createOffer(peer.matchId);
+        if (peer.isInitiator) {
+          await this.webRTCService.createOffer(peer.matchId);
+        }
       })
     );
 

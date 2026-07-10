@@ -22,6 +22,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   isPeerTyping = false;
   showFriendPicker = false;
   friends: Friend[] = [];
+  mobileShowChat = false;
   private subscriptions: Subscription[] = [];
   private searchSubject = new Subject<string>();
 
@@ -132,6 +133,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   selectConversation(convId: string): void {
     this.activeChat = convId;
+    this.mobileShowChat = true;
     this.messages = [];
     this.chatError = null;
     this.isPeerTyping = false;
@@ -164,6 +166,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
         this.applySearch();
         if (this.activeChat === convId) {
           this.activeChat = null;
+          this.mobileShowChat = false;
           this.messages = [];
         }
       },
@@ -222,5 +225,16 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   getActiveConversation(): Conversation | undefined {
     return this.conversations.find(c => c.id === this.activeChat);
+  }
+
+  backToList(): void {
+    this.mobileShowChat = false;
+  }
+
+  callFriend(): void {
+    const conv = this.getActiveConversation();
+    if (!conv) return;
+    this.socketService.callFriend(conv.peer.id);
+    this.router.navigate(['/video']);
   }
 }

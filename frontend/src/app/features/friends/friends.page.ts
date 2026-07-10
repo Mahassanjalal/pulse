@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { FriendService } from '../../core/services/friend.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PremiumModalService } from '../../core/services/premium-modal.service';
+import { SocketService } from '../../core/services/socket.service';
 import { Friend, FriendRequestItem } from '@models/user.model';
 import { Subject, debounceTime, distinctUntilChanged, Subscription } from 'rxjs';
 
@@ -26,7 +27,8 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
     private friendService: FriendService,
     private router: Router,
     public authService: AuthService,
-    private premiumModalService: PremiumModalService
+    private premiumModalService: PremiumModalService,
+    private socketService: SocketService
   ) {}
 
   ngOnInit(): void {
@@ -121,5 +123,10 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
       next: () => this.friendService.loadFriends(),
       error: () => this.showToast('Failed to update favorite')
     });
+  }
+
+  callFriend(friendId: string): void {
+    this.socketService.callFriend(friendId);
+    this.router.navigate(['/video']);
   }
 }

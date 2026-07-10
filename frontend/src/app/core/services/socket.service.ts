@@ -45,6 +45,7 @@ export class SocketService implements OnDestroy {
       'match_message', 'match_message_sent', 'peer_typing',
       'friend_request_notification', 'friend_request_received', 'friend_request_accepted', 'friend_added',
       'notification', 'presence_changed', 'presence_sync_result', 'pong',
+      'incoming_call', 'call_declined', 'call_cancelled', 'call_error',
     ];
 
     events.forEach(event => {
@@ -139,5 +140,21 @@ export class SocketService implements OnDestroy {
 
   sendFriendRequest(toUserId: string): void {
     this.emit('add_friend', { peerId: toUserId });
+  }
+
+  callFriend(friendId: string): void {
+    this.emit('call_friend', { friendId });
+  }
+
+  acceptCall(callId: string): void {
+    this.emit('accept_call', { callId });
+  }
+
+  declineCall(callId: string): void {
+    this.emit('decline_call', { callId });
+  }
+
+  cancelCall(callId: string): void {
+    this.emit('cancel_call', { callId });
   }
 }

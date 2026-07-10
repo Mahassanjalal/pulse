@@ -10,6 +10,8 @@ export class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
+  private currentMatchId: string | null = null;
+  private pendingCandidates: RTCIceCandidateInit[] = [];
 
   private localStreamSubject = new BehaviorSubject<MediaStream | null>(null);
   private remoteStreamSubject = new BehaviorSubject<MediaStream | null>(null);
@@ -33,25 +35,55 @@ export class WebRTCService {
   constructor(private socketService: SocketService) {
     this.socketService.on('webrtc_offer').subscribe(async (data: any) => {
       if (!this.peerConnection) return;
-      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await this.peerConnection.createAnswer();
-      await this.peerConnection.setLocalDescription(answer);
-      this.socketService.sendAnswer(data.fromUserId || '', answer);
+      try {
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await this.peerConnection.createAnswer();
+        await this.peerConnection.setLocalDescription(answer);
+        if (this.currentMatchId) {
+          this.socketService.sendAnswer(this.currentMatchId, answer);
+        }
+        await this.flushCandidates();
+      } catch (e) {
+        console.error('Error handling webrtc offer', e);
+      }
     });
 
     this.socketService.on('webrtc_answer').subscribe(async (data: any) => {
       if (!this.peerConnection) return;
-      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      try {
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        await this.flushCandidates();
+      } catch (e) {
+        console.error('Error handling webrtc answer', e);
+      }
     });
 
     this.socketService.on('webrtc_candidate').subscribe(async (data: any) => {
       if (!this.peerConnection || !data.candidate) return;
       try {
-        await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        // Buffer candidates that arrive before the remote description is set,
+        // otherwise addIceCandidate throws and the candidate is lost.
+        if (this.peerConnection.remoteDescription && this.peerConnection.remoteDescription.type) {
+          await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } else {
+          this.pendingCandidates.push(data.candidate);
+        }
       } catch (e) {
         console.error('Error adding ice candidate', e);
       }
     });
+  }
+
+  private async flushCandidates(): Promise<void> {
+    if (!this.peerConnection) return;
+    while (this.pendingCandidates.length) {
+      const candidate = this.pendingCandidates.shift()!;
+      try {
+        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {
+        console.error('Error adding buffered ice candidate', e);
+      }
+    }
   }
 
   get localStream$(): Observable<MediaStream | null> {
@@ -79,6 +111,8 @@ export class WebRTCService {
   }
 
   async createPeerConnection(matchId: string): Promise<void> {
+    this.currentMatchId = matchId;
+    this.pendingCandidates = [];
     this.peerConnection = new RTCPeerConnection(this.iceServers);
 
     this.remoteStream = new MediaStream();
@@ -162,6 +196,8 @@ export class WebRTCService {
   disconnect(): void {
     this.peerConnection?.close();
     this.peerConnection = null;
+    this.currentMatchId = null;
+    this.pendingCandidates = [];
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
     this.remoteStream = null;

@@ -15,6 +15,7 @@ export interface MatchData {
   isPremium: boolean;
   avatar: string;
   gender: string;
+  isInitiator: boolean;
 }
 
 @Injectable({
@@ -52,6 +53,7 @@ export class MatchingService {
         isPremium: data.peer.isPremium || false,
         avatar: data.peer.profilePicture || '',
         gender: data.peer.gender || '',
+        isInitiator: !!data.isInitiator,
       });
       this.startTimer();
     });
