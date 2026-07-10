@@ -42,8 +42,10 @@ async function main() {
       { key: 'verified', name: 'Verified', description: 'Verify your account', icon: 'verified', maxProgress: 1 },
     ];
     for (const a of ACHIEVEMENTS) {
-      await prisma.userAchievement.create({
-        data: { userId: user.id, name: a.name, description: a.description, icon: a.icon, maxProgress: a.maxProgress, progress: 0, unlocked: false },
+      await prisma.userAchievement.upsert({
+        where: { userId_name: { userId: user.id, name: a.name } },
+        update: {},
+        create: { userId: user.id, name: a.name, description: a.description, icon: a.icon, maxProgress: a.maxProgress, progress: 0, unlocked: false },
       });
     }
   }
@@ -51,8 +53,11 @@ async function main() {
   // Create a match between demo user and sarah
   const demo = created[0]!;
   const sarah = created[1]!;
-  const match = await prisma.match.create({
-    data: {
+  const match = await prisma.match.upsert({
+    where: { id: 'seed-demo-sarah-match' },
+    update: {},
+    create: {
+      id: 'seed-demo-sarah-match',
       user1Id: demo.id,
       user2Id: sarah.id,
       status: 'ENDED',
@@ -63,6 +68,7 @@ async function main() {
     },
   });
 
+  await prisma.message.deleteMany({ where: { matchId: match.id } });
   await prisma.message.createMany({
     data: [
       { matchId: match.id, senderId: sarah.id, receiverId: demo.id, content: 'Hey! Where are you from?', type: 'TEXT' },
@@ -75,13 +81,7 @@ async function main() {
 
   console.log('  Created demo conversation with messages');
 
-  // Create a friend request
-  await prisma.friendRequest.create({
-    data: { fromUserId: sarah.id, toUserId: demo.id, status: 'PENDING' },
-  });
-  console.log('  Created demo friend request');
-
-  // Seed coin packages (idempotent upsert so re-running seed is safe).
+  // Seed coin packages first (idempotent upsert so re-running seed is safe).
   const COIN_PACKAGES = [
     { id: 'coins_100', name: 'Starter', coins: 100, priceUsd: 0.99, bonus: 0, popular: false },
     { id: 'coins_550', name: 'Popular', coins: 550, priceUsd: 4.99, bonus: 50, popular: true },
@@ -96,6 +96,14 @@ async function main() {
     });
   }
   console.log('  Created coin packages');
+
+  // Create a friend request (idempotent: skip if one already exists).
+  await prisma.friendRequest.upsert({
+    where: { fromUserId_toUserId: { fromUserId: sarah.id, toUserId: demo.id } },
+    update: {},
+    create: { fromUserId: sarah.id, toUserId: demo.id, status: 'PENDING' },
+  });
+  console.log('  Created demo friend request');
 
   console.log('Seeding complete!');
 }
