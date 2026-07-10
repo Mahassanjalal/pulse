@@ -17,6 +17,7 @@ export class WebRTCService {
   private localStreamSubject = new BehaviorSubject<MediaStream | null>(null);
   private remoteStreamSubject = new BehaviorSubject<MediaStream | null>(null);
   private connectionStateSubject = new Subject<string>();
+  private cameraErrorSubject = new Subject<string | null>();
 
   private iceServers: RTCConfiguration = {
     iceServers: [
@@ -110,6 +111,10 @@ export class WebRTCService {
     return this.connectionStateSubject.asObservable();
   }
 
+  get cameraError$(): Observable<string | null> {
+    return this.cameraErrorSubject.asObservable();
+  }
+
   async init(): Promise<void> {
     // Idempotent: if we already have a local stream, just re-emit it. This
     // matters because callFriend/acceptIncomingCall init() inside the click
@@ -125,9 +130,17 @@ export class WebRTCService {
         video: true,
         audio: true,
       });
+      this.cameraErrorSubject.next(null);
       this.localStreamSubject.next(this.localStream);
-    } catch (err) {
+    } catch (err: any) {
+      // Most common on mobile: the page is served over an insecure origin
+      // (http://LAN-IP:4200 instead of localhost/HTTPS), so getUserMedia
+      // is blocked. Surface it instead of hanging on "Connecting…".
+      const msg = err?.name === 'NotAllowedError'
+        ? 'Camera/mic permission denied'
+        : 'Camera/mic unavailable (needs HTTPS or localhost)';
       console.error('Failed to get user media:', err);
+      this.cameraErrorSubject.next(msg);
     }
   }
 
@@ -237,6 +250,7 @@ export class WebRTCService {
     this.localStream = null;
     this.remoteStream = null;
     this.pendingOffer = null;
+    this.cameraErrorSubject.next(null);
     this.localStreamSubject.next(null);
     this.remoteStreamSubject.next(null);
   }

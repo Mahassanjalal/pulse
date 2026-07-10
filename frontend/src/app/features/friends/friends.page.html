@@ -53,6 +53,9 @@
               </div>
             </div>
             <div class="flex items-center gap-xs">
+              <button (click)="callFriend(friend)" type="button" class="p-sm rounded-full hover:bg-white/5 transition-all" aria-label="Call friend">
+                <span class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors">videocam</span>
+              </button>
               <button (click)="toggleFavorite(friend.friendId)" type="button" class="p-sm hover:bg-white/5 rounded-full transition-all">
                 <span class="material-symbols-outlined text-body-md" [class]="friend.isFavorite ? 'text-primary' : 'text-on-surface-variant hover:text-primary'">favorite</span>
               </button>

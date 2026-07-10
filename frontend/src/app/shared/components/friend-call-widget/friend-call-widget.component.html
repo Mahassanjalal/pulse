@@ -39,6 +39,11 @@
       </div>
     </div>
 
+    <!-- Camera / mic error (e.g. mobile insecure origin or permission denied) -->
+    <div *ngIf="cameraError" class="px-md py-sm bg-error/20 border-t border-error/40 text-error font-label text-label-sm">
+      {{ cameraError }}
+    </div>
+
     <!-- Video area -->
     <div class="relative w-full aspect-video bg-black/60">
       <video #remoteVideo class="w-full h-full object-cover" style="transform: scaleX(-1);" autoplay playsinline></video>

@@ -30,6 +30,7 @@ export class FriendCallWidgetComponent implements OnDestroy {
   isCameraOff = false;
   callTimer = '00:00';
   connectionState = '';
+  cameraError: string | null = null;
 
   // Drag state (pointer events so it works for touch + mouse).
   isDragging = false;
@@ -49,7 +50,10 @@ export class FriendCallWidgetComponent implements OnDestroy {
   ) {
     // The widget only renders once the call is ACTIVE (callee accepted and the
     // WebRTC match is live). While state is 'calling' the AppComponent shows
-    // the centered "Calling…" modal instead.
+    // the centered "Calling…" modal instead. Any non-active state (calling,
+    // or idle after cancel/decline/error/end) must release the camera + mic so
+    // the device isn't left streaming. Re-acquiring on 'active' works without
+    // a fresh gesture because permission was already granted by the click.
     this.subs.push(
       this.callService.state$.subscribe(state => {
         if (state === 'active') {
@@ -62,6 +66,8 @@ export class FriendCallWidgetComponent implements OnDestroy {
           this.active = null;
           this.stopTimer();
           this.currentMatchId = null;
+          // Release camera + mic on ringing / cancel / decline / error / end.
+          this.webRTCService.disconnect();
         }
       })
     );
@@ -89,6 +95,20 @@ export class FriendCallWidgetComponent implements OnDestroy {
       this.webRTCService.connectionState$.subscribe(state => {
         this.connectionState = state;
         if (state === 'connected') this.callStage = 'live';
+      })
+    );
+
+    // If camera/mic can't be acquired (e.g. insecure LAN origin on
+    // mobile, or permission denied) show why instead of hanging on
+    // "Connecting…", and tear the call down so the camera LED is freed.
+    this.subs.push(
+      this.webRTCService.cameraError$.subscribe(err => {
+        if (!err) { this.cameraError = null; return; }
+        this.cameraError = err;
+        this.callStage = 'connecting';
+        const call = this.callService.current;
+        if (call?.callId) this.socketService.cancelCall(call.callId);
+        this.callService.clear();
       })
     );
 
