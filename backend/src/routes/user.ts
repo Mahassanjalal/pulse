@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { withRealCounts } from '../lib/user';
+import { getFriendIds } from '../lib/relations';
 import { UpdateProfileSchema, UpdatePreferencesSchema, UpdatePrivacySettingsSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
 
@@ -302,25 +303,8 @@ export default async function userRoutes(app: FastifyInstance) {
     const userId = authUser.id;
     const { id: otherUserId } = req.params as { id: string };
 
-    const userFriends = await prisma.friend.findMany({
-      where: {
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
-    });
-
-    const userFriendIds = userFriends.map((f) => 
-      f.senderId === userId ? f.receiverId : f.senderId
-    );
-
-    const otherFriends = await prisma.friend.findMany({
-      where: {
-        OR: [{ senderId: otherUserId }, { receiverId: otherUserId }],
-      },
-    });
-
-    const otherFriendIds = otherFriends.map((f) =>
-      f.senderId === otherUserId ? f.receiverId : f.senderId
-    );
+    const userFriendIds = await getFriendIds(userId);
+    const otherFriendIds = await getFriendIds(otherUserId);
 
     const mutualIds = userFriendIds.filter((id) => otherFriendIds.includes(id));
 

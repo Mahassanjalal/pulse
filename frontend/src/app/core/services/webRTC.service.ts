@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { SocketService } from './socket.service';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -19,6 +20,13 @@ export class WebRTCService {
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
+      // TURN relays (with temp credentials, e.g. from a short-lived backend
+      // token) let media traverse symmetric NATs / strict firewalls where
+      // STUN-only peer-to-peer fails. For production scale (many concurrent
+      // calls) replace P2P with an SFU (e.g. mediasoup/LiveKit) that relays
+      // through TURN-independent infrastructure instead of burning TURN
+      // bandwidth per call.
+      ...(environment.turnServers ?? []),
     ]
   };
 

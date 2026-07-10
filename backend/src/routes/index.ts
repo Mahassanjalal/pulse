@@ -9,11 +9,15 @@ import notificationRoutes from './notification';
 import reportRoutes from './report';
 import premiumRoutes from './premium';
 import adminRoutes from './admin';
+import leaderboardRoutes from './leaderboard';
+import authExtraRoutes from './auth-extra';
+import moderationRoutes from './moderation';
 
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
   
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
+  await app.register(authExtraRoutes, { prefix: '/api/v1/auth' });
   await app.register(userRoutes, { prefix: '/api/v1/users' });
   await app.register(matchRoutes, { prefix: '/api/v1/matches' });
   await app.register(chatRoutes, { prefix: '/api/v1/chat' });
@@ -22,4 +26,6 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(reportRoutes, { prefix: '/api/v1/reports' });
   await app.register(premiumRoutes, { prefix: '/api/v1/premium' });
   await app.register(adminRoutes, { prefix: '/api/v1/admin' });
+  await app.register(leaderboardRoutes, { prefix: '/api/v1' });
+  await app.register(moderationRoutes, { prefix: '/api/v1/moderation' });
 }

@@ -1,8 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { SendMessageSchema, CreateConversationSchema } from '../lib/validators';
-import { authenticate, getAuthUser } from '../middleware/auth';
+import { authenticate, getAuthUser, requireUnlocked } from '../middleware/auth';
 import { NotificationService, isBlocked } from '../lib/notifications';
+import { getFriendIds, getPeerId } from '../lib/relations';
 
 export default async function chatRoutes(app: FastifyInstance) {
   app.get('/conversations', { preHandler: authenticate }, async (req) => {
@@ -10,17 +11,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     const userId = authUser.id;
 
     // Get all friends of the current user
-    const friendships = await prisma.friend.findMany({
-      where: {
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
-      select: {
-        senderId: true,
-        receiverId: true,
-      },
-    });
-
-    const friendIds = friendships.map(f => f.senderId === userId ? f.receiverId : f.senderId);
+    const friendIds = await getFriendIds(userId);
 
     const matches = await prisma.match.findMany({
       where: {
@@ -68,7 +59,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     return { conversations };
   });
 
-  app.post('/conversations', { preHandler: authenticate }, async (req, reply) => {
+  app.post('/conversations', { preHandler: [authenticate, requireUnlocked] }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const { friendId } = CreateConversationSchema.parse(req.body);
@@ -139,7 +130,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     return { success: true };
   });
 
-  app.get('/messages/:matchId', { preHandler: authenticate }, async (req) => {
+  app.get('/messages/:matchId', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const { matchId } = req.params as { matchId: string };
@@ -153,7 +144,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     });
 
     if (!match) {
-      return { error: 'Conversation not found' };
+      return reply.status(404).send({ error: 'Conversation not found' });
     }
 
     // Check if users are friends
@@ -168,7 +159,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     });
 
     if (!areFriends) {
-      return { error: 'You must be friends to view messages. Send a friend request first.' };
+      return reply.status(403).send({ error: 'You must be friends to view messages. Send a friend request first.' });
     }
 
     const where: Record<string, any> = { matchId };
@@ -204,7 +195,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/messages', { preHandler: authenticate }, async (req) => {
+  app.post('/messages', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const data = SendMessageSchema.parse(req.body);
@@ -217,7 +208,7 @@ export default async function chatRoutes(app: FastifyInstance) {
     });
     
     if (!match) {
-      return { error: 'Conversation not found' };
+      return reply.status(404).send({ error: 'Conversation not found' });
     }
 
     const receiverId = match.user1Id === userId ? match.user2Id : match.user1Id;
@@ -233,11 +224,11 @@ export default async function chatRoutes(app: FastifyInstance) {
     });
 
     if (!areFriends) {
-      return { error: 'You must be friends to send messages. Send a friend request first.' };
+      return reply.status(403).send({ error: 'You must be friends to send messages. Send a friend request first.' });
     }
 
     if (await isBlocked(userId, receiverId)) {
-      return { error: 'Cannot send message to this user' };
+      return reply.status(403).send({ error: 'Cannot send message to this user' });
     }
     
     const message = await prisma.message.create({

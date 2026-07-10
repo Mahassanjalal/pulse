@@ -102,28 +102,47 @@ export class AuthService {
     throw new Error('Google login failed');
   }
 
-  async loginWithApple(): Promise<User> {
-    throw new Error('Apple login not yet implemented on backend');
+  async loginWithApple(identityToken: string): Promise<User> {
+    const res = await firstValueFrom(this.http.post<AuthResponse>(`${environment.apiUrl}/auth/apple`, { identityToken }));
+    if (res) {
+      this.storeTokens(res.token, res.refreshToken, res.user.id!);
+      this.currentUser$.next(res.user as User);
+      this.socketService.connect();
+      return res.user as User;
+    }
+    throw new Error('Apple login failed');
+  }
+
+  async sendOtp(phone: string): Promise<{ devMode: boolean; code?: string }> {
+    return firstValueFrom(this.http.post<{ devMode: boolean; code?: string }>(`${environment.apiUrl}/auth/send-otp`, { phone }));
   }
 
   async loginWithPhone(phone: string, otp: string): Promise<User> {
-    throw new Error('Phone login not yet implemented on backend');
-  }
-
-  async sendOtp(phone: string): Promise<void> {
-    throw new Error('OTP not yet implemented on backend');
+    const res = await firstValueFrom(this.http.post<AuthResponse>(`${environment.apiUrl}/auth/verify-otp`, { phone, code: otp }));
+    if (res) {
+      this.storeTokens(res.token, res.refreshToken, res.user.id!);
+      this.currentUser$.next(res.user as User);
+      this.socketService.connect();
+      return res.user as User;
+    }
+    throw new Error('Phone login failed');
   }
 
   async verifyOtp(phone: string, otp: string): Promise<User> {
-    throw new Error('OTP verification not yet implemented on backend');
+    return this.loginWithPhone(phone, otp);
   }
 
-  async resetPassword(email: string): Promise<void> {
-    throw new Error('Password reset not yet implemented on backend');
+  async resetPassword(email: string): Promise<{ devMode: boolean; resetToken?: string }> {
+    return firstValueFrom(this.http.post<{ devMode: boolean; resetToken?: string }>(`${environment.apiUrl}/auth/forgot-password`, { email }));
   }
 
-  async recoverAccount(): Promise<void> {
-    throw new Error('Account recovery not yet implemented on backend');
+  async recoverAccount(): Promise<{ devMode: boolean; resetToken?: string }> {
+    // Account recovery shares the password-reset flow.
+    throw new Error('Provide the account email to recoverAccount()');
+  }
+
+  async resetPasswordConfirm(token: string, newPassword: string): Promise<void> {
+    await firstValueFrom(this.http.post(`${environment.apiUrl}/auth/reset-password`, { token, newPassword }));
   }
 
   async logout(): Promise<void> {

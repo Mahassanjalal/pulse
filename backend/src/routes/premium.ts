@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authenticate, getAuthUser } from '../middleware/auth';
 import { stripe, isStripeConfigured } from '../lib/stripe';
+import { unlockAccount } from '../lib/moderation';
 
 const PLANS = [
   {
@@ -42,6 +43,15 @@ function computeEndDate(period: string): Date {
 
 function planPrice(plan: typeof PLANS[number], period: string): number {
   return period === 'yearly' ? plan.price * 12 * 0.8 : plan.price;
+}
+
+type Plan = typeof PLANS[number];
+
+// Single source of truth for "find a plan by id", shared by create-checkout,
+// subscribe, and the Stripe webhook (previously copy-pasted everywhere).
+export function resolvePlan(planId: string | undefined): Plan | null {
+  if (!planId) return null;
+  return PLANS.find((p) => p.id === planId) ?? null;
 }
 
 async function grantPremium(userId: string, plan: typeof PLANS[number], period: string): Promise<any> {
@@ -100,7 +110,7 @@ export default async function premiumRoutes(app: FastifyInstance) {
     const authUser = getAuthUser(req)!;
     const { planId, period = 'monthly' } = req.body as { planId: string; period?: string };
 
-    const plan = PLANS.find(p => p.id === planId);
+    const plan = resolvePlan(planId);
     if (!plan) {
       return reply.status(400).send({ error: 'Invalid plan' });
     }
@@ -166,13 +176,13 @@ export default async function premiumRoutes(app: FastifyInstance) {
   });
 
   // POST /api/v1/premium/subscribe - Direct subscribe (dev/testing fallback).
-  app.post('/subscribe', { preHandler: authenticate }, async (req) => {
+  app.post('/subscribe', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const { planId, period = 'monthly' } = req.body as { planId: string; period?: string };
 
-    const plan = PLANS.find(p => p.id === planId);
+    const plan = resolvePlan(planId);
     if (!plan) {
-      return { error: 'Invalid plan' };
+      return reply.status(400).send({ error: 'Invalid plan' });
     }
 
     const subscription = await grantPremium(authUser.id, plan, period);
@@ -218,9 +228,13 @@ export async function handleStripeWebhook(req: any, reply: any): Promise<void> {
     const userId = session.metadata?.userId;
     const planId = session.metadata?.planId;
     const period = session.metadata?.period || 'monthly';
-    const plan = PLANS.find(p => p.id === planId);
+    const plan = resolvePlan(planId);
     if (userId && plan) {
       await grantPremium(userId, plan, period);
+    }
+    // Account-unlock payment ($10) also lands here with purpose: UNLOCK.
+    if (userId && session.metadata?.purpose === 'UNLOCK') {
+      await unlockAccount(userId);
     }
   }
 

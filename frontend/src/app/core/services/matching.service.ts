@@ -164,7 +164,4 @@ export class MatchingService {
     this.timerUpdate$.next(0);
   }
 
-  getMatchHistory(): Observable<any> {
-    return this.http.get(`${environment.apiUrl}/matches/history`);
-  }
 }

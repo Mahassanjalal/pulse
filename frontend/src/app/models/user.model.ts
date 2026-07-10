@@ -15,6 +15,7 @@ export interface User {
   isVerified: boolean;
   isPremium: boolean;
   isGuest?: boolean;
+  role?: 'USER' | 'ADMIN' | 'MODERATOR';
   onlineStatus: 'online' | 'offline' | 'away';
   lastSeen?: Date;
   friendsCount: number;

@@ -1,4 +1,14 @@
 import { prisma } from './prisma';
+import type { Server as SocketIOServer } from 'socket.io';
+
+// Socket.IO server reference, set once at boot (server.ts). Used to push
+// real-time `notification` events to connected clients. Null in contexts
+// where the socket server isn't available.
+let io: SocketIOServer | null = null;
+
+export function setNotificationIO(server: SocketIOServer | null) {
+  io = server;
+}
 
 export async function isBlocked(userId: string, targetId: string): Promise<boolean> {
   const blocked = await prisma.blockedUser.findFirst({
@@ -14,7 +24,7 @@ export async function isBlocked(userId: string, targetId: string): Promise<boole
 
 export class NotificationService {
   static async create(userId: string, type: string, title: string, message: string, data?: any) {
-    return prisma.notification.create({
+    const notification = await prisma.notification.create({
       data: {
         userId,
         type,
@@ -23,6 +33,14 @@ export class NotificationService {
         data: data ? JSON.stringify(data) : null,
       },
     });
+
+    // Real-time push: the frontend NotificationService subscribes to the
+    // `notification` event to update its store without polling.
+    if (io) {
+      io.to(`user_${userId}`).emit('notification', notification);
+    }
+
+    return notification;
   }
 
   static async friendRequest(toUserId: string, fromUserName: string) {

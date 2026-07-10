@@ -13,6 +13,7 @@ model User {
   password    String
   username    String @unique
   displayName String?
+  phone       String? @unique
   
   age                 Int?
   gender              String?
@@ -48,6 +49,13 @@ model User {
   
   role String @default("USER")
   
+  // Account lock (e.g. nudity on video). Locked users can still log in but
+  // cannot match, message, call, or manage friends. Unlock requires a $10
+  // payment processed via the /premium or /moderation unlock flow.
+  isLocked         Boolean @default(false)
+  lockReason       String?
+  lockUnlockedAt   DateTime?
+  
   privacySettings       PrivacySettings?
   preferences           UserPreferences?
   achievements          UserAchievement[]
@@ -68,6 +76,8 @@ model User {
   refreshTokens         RefreshToken[]
   profileViews          ProfileView[]
   profileVisitors       ProfileView[] @relation("ProfileVisitors")
+  otpCodes              OtpCode[]
+  resetTokens           ResetToken[]
 }
 
 model PrivacySettings {
@@ -285,4 +295,28 @@ model UserAchievement {
   createdAt   DateTime @default(now())
   
   @@unique([userId, name])
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  purpose   String   @default("LOGIN") // LOGIN | RESET
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model ResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

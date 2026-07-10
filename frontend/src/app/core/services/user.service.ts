@@ -78,8 +78,4 @@ export class UserService {
   createReport(reportedUserId: string, category: string, description: string): Observable<any> {
     return this.http.post(`${environment.apiUrl}/reports`, { reportedUserId, category, description });
   }
-
-  searchUsers(query: string): Observable<{ users: any[] }> {
-    return this.http.get<{ users: any[] }>(`${environment.apiUrl}/users/search?q=${encodeURIComponent(query)}`);
-  }
 }

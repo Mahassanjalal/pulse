@@ -10,6 +10,7 @@ import { prisma } from './lib/prisma';
 import { registerRoutes } from './routes';
 import { setupSocketHandlers } from './socket/handlers';
 import { handleStripeWebhook } from './routes/premium';
+import { setNotificationIO } from './lib/notifications';
 import requestLogger from './plugins/request-logger';
 
 const app = fastify({
@@ -89,10 +90,29 @@ async function start() {
   });
 
   app.decorate('io', io);
+  setNotificationIO(io);
 
   app.setErrorHandler((error: any, request, reply) => {
-    const statusCode = error.statusCode || 500;
     const correlationId = (request as any).correlationId;
+
+    // Zod validation failures should return 400 with field-level issues,
+    // not a generic 500 (ZodError has no statusCode of its own).
+    if (error?.name === 'ZodError' && Array.isArray(error.issues)) {
+      request.log.warn(
+        { correlationId, issues: error.issues },
+        `Validation failed: ${request.method} ${request.url}`
+      );
+      return reply.status(400).send({
+        error: 'Validation failed',
+        issues: error.issues.map((i: any) => ({
+          path: i.path?.join('.') || '',
+          message: i.message,
+        })),
+        correlationId,
+      });
+    }
+
+    const statusCode = error.statusCode || 500;
 
     request.log.error(
       {

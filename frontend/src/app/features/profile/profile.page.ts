@@ -7,32 +7,8 @@ import { FriendService } from '../../core/services/friend.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PremiumModalService } from '../../core/services/premium-modal.service';
 import { UserService } from '../../core/services/user.service';
+import { UserProfile } from '@models/user.model';
 import { environment } from '@env/environment';
-
-interface UserProfile {
-  id: string;
-  username: string;
-  displayName: string;
-  age?: number;
-  gender?: string;
-  bio?: string;
-  country?: string;
-  languages: string;
-  interests: string;
-  profilePicture?: string;
-  coverImage?: string;
-  isVerified: boolean;
-  isPremium: boolean;
-  status: string;
-  trustScore: number;
-  verificationLevel: number;
-  communityRating: number;
-  friendsCount: number;
-  totalConversations: number;
-  createdAt: string;
-  privacySettings?: any;
-  isPrivate?: boolean;
-}
 
 @Component({
   selector: 'pulse-profile',

@@ -49,15 +49,15 @@ export class GuestGuard implements CanActivate {
 @Injectable({
   providedIn: 'root'
 })
-export class PremiumGuard implements CanActivate {
+export class AdminGuard implements CanActivate {
   constructor(private authService: AuthService, private router: Router) {}
 
   canActivate(): boolean {
     const user = this.authService.getCurrentUser();
-    if (user && user.isPremium) {
+    if (user && (user.role === 'ADMIN' || user.role === 'MODERATOR')) {
       return true;
     }
-    this.router.navigate(['/premium']);
+    this.router.navigate(['/dashboard']);
     return false;
   }
 }

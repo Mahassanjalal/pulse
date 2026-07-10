@@ -8,11 +8,25 @@ export interface AuthUser {
   displayName: string | null;
   isPremium: boolean;
   isVerified: boolean;
+  isLocked: boolean;
   role: 'USER' | 'ADMIN' | 'MODERATOR';
 }
 
 export function getAuthUser(req: FastifyRequest): AuthUser | undefined {
   return (req as any).authUser;
+}
+
+/**
+ * PreHandler that rejects locked accounts with 403. Admins/moderators are
+ * exempt so they can still operate. Use on any route that lets a user connect
+ * with others (matching, chat, friends, video/WebRTC signaling).
+ */
+export async function requireUnlocked(req: FastifyRequest, reply: FastifyReply) {
+  const user = getAuthUser(req);
+  if (user && user.isLocked && user.role === 'USER') {
+    reply.status(403).send({ error: 'Account locked', code: 'ACCOUNT_LOCKED', lockReason: user.isLocked ? 'Account locked due to a violation. Pay $10 to unlock.' : undefined });
+    return;
+  }
 }
 
 export async function authenticate(req: FastifyRequest, reply: FastifyReply) {
@@ -34,6 +48,7 @@ export async function authenticate(req: FastifyRequest, reply: FastifyReply) {
         displayName: true,
         isPremium: true,
         isVerified: true,
+        isLocked: true,
         role: true,
       },
     });

@@ -2,11 +2,20 @@ import { Server, Socket } from 'socket.io';
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { NotificationService, isBlocked } from '../lib/notifications';
+import { getPeerId, findFriendRequest } from '../lib/relations';
+import { unlockAchievement, type AchievementKey } from '../lib/achievements';
+
+async function unlockConversationAchievements(userId: string, total: number): Promise<void> {
+  await unlockAchievement(userId, 'first_conversation', 1);
+  await unlockAchievement(userId, 'conversations_10', total);
+  await unlockAchievement(userId, 'conversations_100', total);
+}
 
 interface SocketAuth extends Socket {
   userId?: string;
   gender?: string;
   isPremium?: boolean;
+  isLocked?: boolean;
 }
 
 const waitingUsers = new Map<string, { socketId: string; filters?: any }>();
@@ -64,7 +73,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const decoded = app.jwt.verify<{ userId: string }>(token);
       const user = await prisma.user.findUnique({
         where: { id: decoded.userId },
-        select: { id: true, status: true, gender: true, isPremium: true },
+        select: { id: true, status: true, gender: true, isPremium: true, isLocked: true },
       });
 
       if (!user) {
@@ -75,6 +84,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       authSocket.userId = user.id;
       authSocket.gender = user.gender || undefined;
       authSocket.isPremium = user.isPremium;
+      authSocket.isLocked = user.isLocked;
       next();
     } catch (err) {
       next(new Error('Invalid or expired token'));
@@ -141,6 +151,11 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // ======================================
 
     socket.on('start_matching', async (data) => {
+      if (authSocket.isLocked) {
+        socket.emit('error', { message: 'Account locked. Pay $10 to unlock and reconnect.', code: 'ACCOUNT_LOCKED' });
+        return;
+      }
+
       console.log(`User ${userId} started matching`);
 
       await prisma.user.update({
@@ -262,7 +277,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         return;
       }
 
-      const otherUserId = match.user1 === userId ? match.user2 : match.user1;
+      const otherUserId = getPeerId(match, userId);
       io.to(`user_${otherUserId}`).emit('webrtc_offer', {
         offer: data.offer,
         fromUserId: userId,
@@ -273,7 +288,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const match = activeMatches.get(data.matchId);
       if (!match) return;
 
-      const otherUserId = match.user1 === userId ? match.user2 : match.user1;
+      const otherUserId = getPeerId(match, userId);
       io.to(`user_${otherUserId}`).emit('webrtc_answer', {
         answer: data.answer,
         fromUserId: userId,
@@ -284,7 +299,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const match = activeMatches.get(data.matchId);
       if (!match) return;
 
-      const otherUserId = match.user1 === userId ? match.user2 : match.user1;
+      const otherUserId = getPeerId(match, userId);
       io.to(`user_${otherUserId}`).emit('webrtc_candidate', {
         candidate: data.candidate,
         fromUserId: userId,
@@ -300,7 +315,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       if (!match) return;
 
       try {
-        const otherUserId = match.user1 === userId ? match.user2 : match.user1;
+        const otherUserId = getPeerId(match, userId);
 
         const message = await prisma.message.create({
           data: {
@@ -354,7 +369,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         data: { status: 'SKIPPED', endTime: new Date() },
       });
 
-      const otherUserId = match.user1 === userId ? match.user2 : match.user1;
+      const otherUserId = getPeerId(match, userId);
       activeMatches.delete(data.matchId);
 
       io.to(`user_${otherUserId}`).emit('match_skipped', { matchId: data.matchId });
@@ -372,7 +387,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         data: { status: 'ENDED', endTime: new Date(), duration },
       });
 
-      const otherUserId = match.user1 === userId ? match.user2 : match.user1;
+      const otherUserId = getPeerId(match, userId);
       activeMatches.delete(data.matchId);
 
       await Promise.all([
@@ -380,8 +395,19 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         prisma.user.update({ where: { id: otherUserId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
       ]);
 
+      // Unlock conversation-based achievements for both participants.
+      const [me, peer] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId }, select: { totalConversations: true } }),
+        prisma.user.findUnique({ where: { id: otherUserId }, select: { totalConversations: true } }),
+      ]);
+      if (me) await unlockConversationAchievements(userId, me.totalConversations);
+      if (peer) await unlockConversationAchievements(otherUserId, peer.totalConversations);
+
       io.to(`user_${otherUserId}`).emit('match_ended', { matchId: data.matchId, reason: 'ended' });
       socket.emit('match_ended', { matchId: data.matchId, reason: 'ended' });
+
+      const peerUser = await prisma.user.findUnique({ where: { id: otherUserId }, select: { displayName: true } });
+      await NotificationService.matchEnded(otherUserId, peerUser?.displayName || 'Someone');
     });
 
     // ======================================
@@ -390,8 +416,23 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
     socket.on('add_friend', async (data: { peerId: string }) => {
       try {
+        if (authSocket.isLocked) {
+          socket.emit('error', { message: 'Account locked. Pay $10 to unlock and reconnect.', code: 'ACCOUNT_LOCKED' });
+          return;
+        }
+
         if (!authSocket.isPremium) {
           socket.emit('error', { message: 'Friend requests are a premium feature. Upgrade to send friend requests.' });
+          return;
+        }
+
+        if (data.peerId === userId) {
+          socket.emit('error', { message: 'Cannot send a friend request to yourself' });
+          return;
+        }
+
+        if (await isBlocked(userId, data.peerId)) {
+          socket.emit('error', { message: 'Cannot send friend request to this user' });
           return;
         }
 
@@ -404,22 +445,38 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           },
         });
 
-        if (!existing) {
-          await prisma.friendRequest.create({
-            data: { fromUserId: userId, toUserId: data.peerId },
-          });
+        const existingFriend = await prisma.friend.findFirst({
+          where: {
+            OR: [
+              { senderId: userId, receiverId: data.peerId },
+              { senderId: data.peerId, receiverId: userId },
+            ],
+          },
+        });
 
-          const sender = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { displayName: true },
-          });
-
-          await NotificationService.friendRequest(data.peerId, sender?.displayName || 'Someone');
+        if (existing || existingFriend) {
+          socket.emit('error', { message: 'Friend request already exists or you are already friends' });
+          return;
         }
+
+        await prisma.friendRequest.create({
+          data: { fromUserId: userId, toUserId: data.peerId },
+        });
+
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { displayName: true },
+        });
+
+        await NotificationService.friendRequest(data.peerId, sender?.displayName || 'Someone');
 
         io.to(`user_${data.peerId}`).emit('friend_request_notification', {
           fromUserId: userId,
           message: 'Someone wants to be your friend!',
+        });
+        io.to(`user_${data.peerId}`).emit('friend_request_received', {
+          fromUserId: userId,
+          fromUserName: sender?.displayName || 'Someone',
         });
       } catch (err) {
         console.error('Add friend error:', err);

@@ -32,6 +32,20 @@ async function main() {
     });
     created.push(user);
     console.log(`  Created user: ${user.username}`);
+
+    // Seed the achievement catalog as locked entries so the UI has data to show.
+    const ACHIEVEMENTS = [
+      { key: 'first_conversation', name: 'First Conversation', description: 'Complete your first chat', icon: 'chat_bubble', maxProgress: 1 },
+      { key: 'conversations_10', name: 'Chatterbox', description: 'Have 10 conversations', icon: 'forum', maxProgress: 10 },
+      { key: 'conversations_100', name: 'Social Butterfly', description: 'Have 100 conversations', icon: 'diversity_3', maxProgress: 100 },
+      { key: 'first_friend', name: 'First Friend', description: 'Add your first friend', icon: 'person_add', maxProgress: 1 },
+      { key: 'verified', name: 'Verified', description: 'Verify your account', icon: 'verified', maxProgress: 1 },
+    ];
+    for (const a of ACHIEVEMENTS) {
+      await prisma.userAchievement.create({
+        data: { userId: user.id, name: a.name, description: a.description, icon: a.icon, maxProgress: a.maxProgress, progress: 0, unlocked: false },
+      });
+    }
   }
 
   // Create a match between demo user and sarah

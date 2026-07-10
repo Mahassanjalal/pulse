@@ -1,7 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
-import { authenticate, getAuthUser } from '../middleware/auth';
+import { authenticate, getAuthUser, requireUnlocked } from '../middleware/auth';
 import { NotificationService, isBlocked } from '../lib/notifications';
+import { getPeerId, findFriendRequest, isFriend } from '../lib/relations';
+import { unlockAchievement } from '../lib/achievements';
 
 export default async function friendRoutes(app: FastifyInstance) {
   app.get('/', { preHandler: authenticate }, async (req) => {
@@ -69,37 +71,23 @@ export default async function friendRoutes(app: FastifyInstance) {
     }
 
     if (toUserId === userId) {
-      return { error: 'Cannot send friend request to yourself' };
+      return reply.status(400).send({ error: 'Cannot send friend request to yourself' });
     }
 
     if (await isBlocked(userId, toUserId)) {
-      return { error: 'Cannot send friend request to this user' };
+      return reply.status(403).send({ error: 'Cannot send friend request to this user' });
     }
     
-    const existing = await prisma.friendRequest.findFirst({
-      where: {
-        OR: [
-          { fromUserId: userId, toUserId },
-          { fromUserId: toUserId, toUserId: userId },
-        ],
-      },
-    });
+    const existing = await findFriendRequest(userId, toUserId);
     
     if (existing) {
-      return { error: 'Friend request already exists' };
+      return reply.status(409).send({ error: 'Friend request already exists' });
     }
     
-    const existingFriend = await prisma.friend.findFirst({
-      where: {
-        OR: [
-          { senderId: userId, receiverId: toUserId },
-          { senderId: toUserId, receiverId: userId },
-        ],
-      },
-    });
+    const existingFriend = await isFriend(userId, toUserId);
     
     if (existingFriend) {
-      return { error: 'Already friends' };
+      return reply.status(409).send({ error: 'Already friends' });
     }
     
     const friendRequest = await prisma.friendRequest.create({
@@ -129,7 +117,7 @@ export default async function friendRoutes(app: FastifyInstance) {
     });
     
     if (!friendRequest) {
-      return { error: 'Friend request not found' };
+      return reply.status(404).send({ error: 'Friend request not found' });
     }
     
     await prisma.friendRequest.update({
@@ -147,11 +135,29 @@ export default async function friendRoutes(app: FastifyInstance) {
     await prisma.user.update({ where: { id: friendRequest.fromUserId }, data: { friendsCount: { increment: 1 } } });
     await prisma.user.update({ where: { id: friendRequest.toUserId }, data: { friendsCount: { increment: 1 } } });
 
+    // Unlock the "first friend" achievement for both participants.
+    await unlockAchievement(friendRequest.fromUserId, 'first_friend', 1);
+    await unlockAchievement(friendRequest.toUserId, 'first_friend', 1);
+
     const accepter = await prisma.user.findUnique({
       where: { id: userId },
       select: { displayName: true },
     });
     await NotificationService.friendAccepted(friendRequest.fromUserId, accepter?.displayName || 'Someone');
+
+    // Real-time push to the requester (frontend listens for these events).
+    const io = (req as any).server.io;
+    if (io) {
+      io.to(`user_${friendRequest.fromUserId}`).emit('friend_request_accepted', {
+        requestId: friendRequest.id,
+        friendId: friend.id,
+        byUserId: userId,
+      });
+      io.to(`user_${friendRequest.fromUserId}`).emit('friend_added', {
+        friendId: friend.id,
+        peer: { id: userId, displayName: accepter?.displayName || 'Someone' },
+      });
+    }
 
     return { friend };
   });
@@ -167,7 +173,7 @@ export default async function friendRoutes(app: FastifyInstance) {
     return { success: true };
   });
 
-  app.delete('/:id', { preHandler: authenticate }, async (req) => {
+  app.delete('/:id', { preHandler: [authenticate, requireUnlocked] }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const { id: friendId } = req.params as { id: string };
@@ -180,7 +186,7 @@ export default async function friendRoutes(app: FastifyInstance) {
     });
     
     if (!friend) {
-      return { error: 'Friend not found' };
+      return reply.status(404).send({ error: 'Friend not found' });
     }
     
     await prisma.friend.delete({ where: { id: friendId } });
@@ -191,7 +197,7 @@ export default async function friendRoutes(app: FastifyInstance) {
     return { success: true };
   });
 
-  app.put('/:id/favorite', { preHandler: authenticate }, async (req) => {
+  app.put('/:id/favorite', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const userId = authUser.id;
     const { id: friendId } = req.params as { id: string };
@@ -204,7 +210,7 @@ export default async function friendRoutes(app: FastifyInstance) {
     });
     
     if (!friend) {
-      return { error: 'Friend not found' };
+      return reply.status(404).send({ error: 'Friend not found' });
     }
     
     const updated = await prisma.friend.update({

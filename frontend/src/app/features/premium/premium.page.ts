@@ -25,50 +25,16 @@ import { PremiumPlan } from '@models/user.model';
         <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">Elevate your connections with advanced targeting and cinematic streaming quality. See who's truly matching your vibe.</p>
       </div>
 
-      <!-- Loading -->
-      <div *ngIf="loading" class="flex justify-center py-xl">
-        <span class="material-symbols-outlined text-4xl text-primary pulse-animation">sync</span>
-      </div>
-
-      <!-- Error -->
-      <div *ngIf="error" class="text-center py-xl text-error">
-        <p>{{ error }}</p>
-        <button (click)="loadPlans()" class="mt-md text-primary hover:underline">Retry</button>
-      </div>
-
       <!-- Pricing -->
-      <div *ngIf="!loading && !error" class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
-        <div *ngFor="let plan of plans" class="glass-panel rounded-3xl p-xl border border-white/10 flex flex-col relative" [ngClass]="{'border-primary/40': plan.popular}">
-          <div *ngIf="plan.popular" class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-on-primary px-lg py-xs rounded-full text-[10px] font-black uppercase tracking-widest">Most Popular</div>
-          <div class="text-center mb-lg">
-            <h3 class="font-headline-md text-headline-md text-on-surface mb-md">{{ plan.name }}</h3>
-            <div class="flex items-baseline justify-center gap-xs">
-              <span class="font-display-lg text-display-lg font-black text-white">\${{ plan.price }}</span>
-              <span class="text-on-surface-variant font-label-md text-label-md">/mo</span>
-            </div>
-          </div>
-          <ul class="space-y-md mb-xl flex-1">
-            <li *ngFor="let feature of plan.features" class="flex items-center gap-md font-label-sm text-label-sm text-on-surface">
-              <span class="material-symbols-outlined text-tertiary text-sm">check_circle</span>
-              {{ feature }}
-            </li>
-          </ul>
-          <ng-container *ngIf="!isPremium; else manageBlock">
-            <button (click)="subscribe(plan.id)" [disabled]="subscribing"
-              class="w-full py-md rounded-xl font-headline-md text-headline-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-              [class]="plan.popular ? 'bg-primary text-on-primary neon-glow-primary' : 'glass-panel text-on-surface border border-white/10 hover:bg-white/10'">
-              <span *ngIf="subscribing" class="material-symbols-outlined animate-spin text-sm inline-block mr-sm">sync</span>
-              {{ subscribing ? 'Processing...' : (plan.popular ? 'Upgrade to ' + plan.name : 'Get ' + plan.name) }}
-            </button>
-          </ng-container>
-          <ng-template #manageBlock>
-            <div class="text-center py-md px-md rounded-xl bg-tertiary/10 border border-tertiary/20">
-              <p class="font-label-md text-label-md text-tertiary mb-sm">Subscribed ✓</p>
-              <button (click)="openCancelConfirm()" type="button" class="text-xs text-on-surface-variant hover:text-error transition-colors">Cancel Subscription</button>
-            </div>
-          </ng-template>
-        </div>
-      </div>
+      <pulse-plan-list
+        [plans]="plans"
+        [loading]="loading"
+        [error]="error"
+        [isPremium]="isPremium"
+        [subscribing]="subscribing"
+        (retry)="loadPlans()"
+        (subscribe)="subscribe($event)">
+      </pulse-plan-list>
 
       <!-- Features Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
