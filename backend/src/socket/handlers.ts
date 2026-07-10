@@ -20,6 +20,10 @@ interface SocketAuth extends Socket {
 }
 
 const waitingUsers = new Map<string, { socketId: string; filters?: any }>();
+// Users already claimed by an in-flight match handshake. Used to prevent two
+// concurrent start_matching handlers from pairing the same waiting user into
+// two different matches (a race that left one peer without a connection).
+const claimedUsers = new Set<string>();
 const activeMatches = new Map<string, { user1: string; user2: string; matchId: string; startTime: number }>();
 const pendingCalls = new Map<string, { callerId: string; calleeId: string }>();
 
@@ -214,14 +218,29 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       for (const [waitingUserId, waitingData] of waitingUsers) {
         if (waitingUserId !== userId) {
-          if (await isBlocked(userId, waitingUserId)) continue;
+          // Reserve both parties synchronously BEFORE any await so a concurrent
+          // start_matching handler can't claim the same waiting user. If either
+          // is already reserved/claimed, skip and keep looking.
+          if (claimedUsers.has(waitingUserId) || claimedUsers.has(userId)) continue;
+          claimedUsers.add(waitingUserId);
+          claimedUsers.add(userId);
+
+          if (await isBlocked(userId, waitingUserId)) {
+            claimedUsers.delete(waitingUserId);
+            claimedUsers.delete(userId);
+            continue;
+          }
 
           if (targetGender) {
             const peerUser = await prisma.user.findUnique({
               where: { id: waitingUserId },
               select: { gender: true },
             });
-            if (peerUser && peerUser.gender !== targetGender) continue;
+            if (peerUser && peerUser.gender !== targetGender) {
+              claimedUsers.delete(waitingUserId);
+              claimedUsers.delete(userId);
+              continue;
+            }
           }
 
           waitingUsers.delete(waitingUserId);
@@ -238,7 +257,15 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
             }),
           ]);
 
-          if (!peer1 || !peer2) return;
+          if (!peer1 || !peer2) {
+            waitingUsers.set(userId, {
+              socketId: socket.id,
+              filters: isPremium ? data?.filters : undefined,
+            });
+            claimedUsers.delete(waitingUserId);
+            claimedUsers.delete(userId);
+            return;
+          }
 
           const peer1Interests: string[] = JSON.parse(peer1.interests || '[]');
           const peer2Interests: string[] = JSON.parse(peer2.interests || '[]');
@@ -298,6 +325,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
     socket.on('cancel_matching', async () => {
       waitingUsers.delete(userId);
+      claimedUsers.delete(userId);
 
       await prisma.user.update({
         where: { id: userId },
@@ -669,6 +697,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       // Remove from waiting pool
       waitingUsers.delete(userId);
+      claimedUsers.delete(userId);
 
       // Multi-tab: only go OFFLINE if this was the last connection
       const connections = userConnections.get(userId);

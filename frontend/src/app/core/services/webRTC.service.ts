@@ -12,6 +12,7 @@ export class WebRTCService {
   private remoteStream: MediaStream | null = null;
   private currentMatchId: string | null = null;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private pendingOffer: { offer: any } | null = null;
 
   private localStreamSubject = new BehaviorSubject<MediaStream | null>(null);
   private remoteStreamSubject = new BehaviorSubject<MediaStream | null>(null);
@@ -34,18 +35,14 @@ export class WebRTCService {
 
   constructor(private socketService: SocketService) {
     this.socketService.on('webrtc_offer').subscribe(async (data: any) => {
-      if (!this.peerConnection) return;
-      try {
-        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-        const answer = await this.peerConnection.createAnswer();
-        await this.peerConnection.setLocalDescription(answer);
-        if (this.currentMatchId) {
-          this.socketService.sendAnswer(this.currentMatchId, answer);
-        }
-        await this.flushCandidates();
-      } catch (e) {
-        console.error('Error handling webrtc offer', e);
+      if (!this.peerConnection) {
+        // The answerer may still be initializing getUserMedia / creating the
+        // peer connection. Buffer the offer and apply it once createPeerConnection
+        // runs, otherwise the offer is dropped and the connection never forms.
+        this.pendingOffer = { offer: data.offer };
+        return;
       }
+      await this.handleOffer(data.offer);
     });
 
     this.socketService.on('webrtc_answer').subscribe(async (data: any) => {
@@ -72,6 +69,21 @@ export class WebRTCService {
         console.error('Error adding ice candidate', e);
       }
     });
+  }
+
+  private async handleOffer(offer: any): Promise<void> {
+    try {
+      if (!this.peerConnection) return;
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
+      if (this.currentMatchId) {
+        this.socketService.sendAnswer(this.currentMatchId, answer);
+      }
+      await this.flushCandidates();
+    } catch (e) {
+      console.error('Error handling webrtc offer', e);
+    }
   }
 
   private async flushCandidates(): Promise<void> {
@@ -111,8 +123,10 @@ export class WebRTCService {
   }
 
   async createPeerConnection(matchId: string): Promise<void> {
+    const bufferedOffer = this.pendingOffer?.offer ?? null;
     this.currentMatchId = matchId;
     this.pendingCandidates = [];
+    this.pendingOffer = null;
     this.peerConnection = new RTCPeerConnection(this.iceServers);
 
     this.remoteStream = new MediaStream();
@@ -125,8 +139,15 @@ export class WebRTCService {
     }
 
     this.peerConnection.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => {
+      const track = event.track;
+      if (track) {
         this.remoteStream!.addTrack(track);
+        this.remoteStreamSubject.next(this.remoteStream);
+        return;
+      }
+      // Fallback for browsers that associate the track with a stream.
+      (event.streams[0]?.getTracks() ?? []).forEach(t => {
+        this.remoteStream!.addTrack(t);
       });
       this.remoteStreamSubject.next(this.remoteStream);
     };
@@ -140,6 +161,11 @@ export class WebRTCService {
     this.peerConnection.onconnectionstatechange = () => {
       this.connectionStateSubject.next(this.peerConnection?.connectionState || 'unknown');
     };
+
+    // If an offer arrived before the peer connection existed, apply it now.
+    if (bufferedOffer) {
+      await this.handleOffer(bufferedOffer);
+    }
   }
 
   async createOffer(matchId: string): Promise<void> {
@@ -201,6 +227,7 @@ export class WebRTCService {
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
     this.remoteStream = null;
+    this.pendingOffer = null;
     this.localStreamSubject.next(null);
     this.remoteStreamSubject.next(null);
   }
