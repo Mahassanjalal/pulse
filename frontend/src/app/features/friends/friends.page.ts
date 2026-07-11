@@ -135,11 +135,11 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
   }
 
   callFriend(friend: Friend): void {
-    // Unlock audio + acquire the camera/mic INSIDE the click gesture so the
-    // browser allows getUserMedia. The widget later runs the WebRTC signaling
-    // (createPeerConnection/offer) when match_found arrives.
+    // Unlock audio in the gesture (needed for the ringtone). Do NOT call
+    // webRTCService.init() here — that would prompt for the camera/mic
+    // before the callee has even accepted. Media is acquired later, by the
+    // widget's match_found handler, once the call is actually connected.
     this.callSoundService.unlock();
-    this.webRTCService.init();
     this.socketService.callFriend(friend.peer.id);
     // Show a 'calling...' overlay; the server replies with call_initiated
     // (confirms) or call_error (busy/offline/not friends) which clears it.
