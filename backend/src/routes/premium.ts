@@ -56,7 +56,7 @@ export function resolvePlan(planId: string | undefined): Plan | null {
   return PLANS.find((p) => p.id === planId) ?? null;
 }
 
-async function grantPremium(userId: string, plan: typeof PLANS[number], period: string): Promise<any> {
+export async function grantPremium(userId: string, plan: typeof PLANS[number], period: string): Promise<any> {
   const endDate = computeEndDate(period);
   const price = planPrice(plan, period);
   const planType = plan.name.toUpperCase() as 'SILVER' | 'GOLD' | 'PLATINUM';
@@ -87,6 +87,18 @@ async function grantPremium(userId: string, plan: typeof PLANS[number], period: 
   });
 
   return subscription;
+}
+
+export async function revokePremium(userId: string): Promise<void> {
+  await prisma.subscription.updateMany({
+    where: { userId },
+    data: { isActive: false },
+  });
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isPremium: false },
+  });
 }
 
 export default async function premiumRoutes(app: FastifyInstance) {

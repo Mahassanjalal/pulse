@@ -18,7 +18,8 @@ export type CoinReason =
   | 'BOOST'
   | 'SUPER_LIKE'
   | 'RE_MATCH'
-  | 'UNLOCK';
+  | 'UNLOCK'
+  | 'ADMIN';
 
 /**
  * Atomic coin balance change backed by the CoinTransaction ledger. Never

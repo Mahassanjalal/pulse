@@ -17,6 +17,7 @@ async function main() {
     { email: 'chloe@pulse.com', username: 'chloe_s', displayName: 'Chloe S.', password, age: 21, gender: 'FEMALE', country: 'FR', languages: JSON.stringify(['French', 'English']), interests: JSON.stringify(['Travel', 'Vlog', 'Dancing']), profilePicture: 'https://i.pravatar.cc/200?img=25' },
     { email: 'leo@pulse.com', username: 'leo_jax', displayName: 'Leo Jax', password, age: 28, gender: 'MALE', country: 'DE', languages: JSON.stringify(['German', 'English']), interests: JSON.stringify(['Gaming', 'Chat', 'Music']), profilePicture: 'https://i.pravatar.cc/200?img=30' },
     { email: 'lily@pulse.com', username: 'lily_k', displayName: 'Lily Kim', password, age: 20, gender: 'FEMALE', country: 'KR', languages: JSON.stringify(['Korean', 'English']), interests: JSON.stringify(['K-pop', 'Fashion', 'Art']), profilePicture: 'https://i.pravatar.cc/200?img=35' },
+    { email: 'admin@pulse.com', username: 'admin', displayName: 'Pulse Admin', password, age: 30, gender: 'OTHER', country: 'US', languages: JSON.stringify(['English']), interests: JSON.stringify(['Moderation', 'Safety']), profilePicture: 'https://i.pravatar.cc/200?img=68', role: 'ADMIN' },
   ];
 
   const created = [];
@@ -103,7 +104,21 @@ async function main() {
     update: {},
     create: { fromUserId: sarah.id, toUserId: demo.id, status: 'PENDING' },
   });
-  console.log('  Created demo friend request');
+  // Seed default system settings (toggled live by admins in the panel).
+  const SYSTEM_SETTINGS = [
+    { key: 'maintenanceMode', value: 'false', description: 'Put the app into read-only maintenance mode' },
+    { key: 'registrationOpen', value: 'true', description: 'Allow new user registrations' },
+    { key: 'matchmakingEnabled', value: 'true', description: 'Allow users to start matching' },
+    { key: 'minAge', value: '18', description: 'Minimum allowed age for new accounts' },
+  ];
+  for (const s of SYSTEM_SETTINGS) {
+    await prisma.systemSetting.upsert({
+      where: { key: s.key },
+      update: {},
+      create: s,
+    });
+  }
+  console.log('  Created system settings');
 
   console.log('Seeding complete!');
 }

@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'pulse-sidebar',
@@ -99,12 +100,17 @@ export class SidebarComponent {
     { icon: 'settings', label: 'Settings', route: '/settings', badge: '' },
   ];
 
-  constructor(private router: Router) {
+  constructor(private router: Router, private authService: AuthService) {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
       this.currentUrl = event.urlAfterRedirects || event.url;
     });
+
+    const u = this.authService.getCurrentUser();
+    if (u && (u.role === 'ADMIN' || u.role === 'MODERATOR')) {
+      this.navItems.push({ icon: 'shield', label: 'Admin', route: '/admin', badge: '' });
+    }
   }
 
   isActive(path: string): boolean {

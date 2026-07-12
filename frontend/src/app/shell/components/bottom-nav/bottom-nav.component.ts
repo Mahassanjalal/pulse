@@ -67,6 +67,11 @@ export class BottomNavComponent {
       this.unreadCount = count;
     });
     this.notificationService.loadNotifications();
+
+    const u = this.authService.getCurrentUser();
+    if (u && (u.role === 'ADMIN' || u.role === 'MODERATOR')) {
+      this.navItems.push({ icon: 'shield', label: 'Admin', route: '/admin', badge: false });
+    }
   }
 
   isActive(path: string): boolean {
