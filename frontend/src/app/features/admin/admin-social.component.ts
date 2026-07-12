@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { SharedModule } from '@shared/shared.module';
 import { AdminService, AdminFriend, AdminFriendRequest, AdminBlock } from '../../core/services/admin.service';
 
 @Component({
@@ -14,6 +15,7 @@ import { AdminService, AdminFriend, AdminFriendRequest, AdminBlock } from '../..
           <button (click)="remove(f)" class="text-xs px-2 py-0.5 rounded bg-error/20 text-error">Remove</button>
         </div>
         <div *ngIf="friends.length===0" class="text-xs text-on-surface-variant">None</div>
+        <pulse-admin-paginator [page]="friendPage" [limit]="limit" [total]="friendTotal" (pageChange)="onFriendPage($event)"></pulse-admin-paginator>
       </section>
 
       <section class="glass-panel rounded-2xl p-md">
@@ -23,6 +25,7 @@ import { AdminService, AdminFriend, AdminFriendRequest, AdminBlock } from '../..
           <button (click)="cancel(r)" class="text-xs px-2 py-0.5 rounded bg-error/20 text-error">Cancel</button>
         </div>
         <div *ngIf="requests.length===0" class="text-xs text-on-surface-variant">None</div>
+        <pulse-admin-paginator [page]="reqPage" [limit]="limit" [total]="reqTotal" (pageChange)="onReqPage($event)"></pulse-admin-paginator>
       </section>
 
       <section class="glass-panel rounded-2xl p-md">
@@ -32,6 +35,7 @@ import { AdminService, AdminFriend, AdminFriendRequest, AdminBlock } from '../..
           <button (click)="unblock(b)" class="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20">Unblock</button>
         </div>
         <div *ngIf="blocks.length===0" class="text-xs text-on-surface-variant">None</div>
+        <pulse-admin-paginator [page]="blockPage" [limit]="limit" [total]="blockTotal" (pageChange)="onBlockPage($event)"></pulse-admin-paginator>
       </section>
     </div>
   `,
@@ -39,22 +43,36 @@ import { AdminService, AdminFriend, AdminFriendRequest, AdminBlock } from '../..
 })
 export class AdminSocialComponent implements OnInit {
   friends: AdminFriend[] = []; requests: AdminFriendRequest[] = []; blocks: AdminBlock[] = [];
+  limit = 20;
+  friendPage = 1; friendTotal = 0;
+  reqPage = 1; reqTotal = 0;
+  blockPage = 1; blockTotal = 0;
 
   constructor(private admin: AdminService) {}
 
   ngOnInit(): void {
-    this.admin.listFriends().subscribe({ next: (r) => { this.friends = r.friends; }, error: () => {} });
-    this.admin.listFriendRequests().subscribe({ next: (r) => { this.requests = r.requests; }, error: () => {} });
-    this.admin.listBlocks().subscribe({ next: (r) => { this.blocks = r.blocks; }, error: () => {} });
+    this.loadFriends(); this.loadRequests(); this.loadBlocks();
   }
+  loadFriends(): void {
+    this.admin.listFriends('', this.friendPage, this.limit).subscribe({ next: (r) => { this.friends = r.friends; this.friendTotal = r.total; }, error: () => {} });
+  }
+  onFriendPage(p: number): void { this.friendPage = p; this.loadFriends(); }
+  loadRequests(): void {
+    this.admin.listFriendRequests('', this.reqPage, this.limit).subscribe({ next: (r) => { this.requests = r.requests; this.reqTotal = r.total; }, error: () => {} });
+  }
+  onReqPage(p: number): void { this.reqPage = p; this.loadRequests(); }
+  loadBlocks(): void {
+    this.admin.listBlocks(this.blockPage, this.limit).subscribe({ next: (r) => { this.blocks = r.blocks; this.blockTotal = r.total; }, error: () => {} });
+  }
+  onBlockPage(p: number): void { this.blockPage = p; this.loadBlocks(); }
   remove(f: AdminFriend): void {
     if (!confirm('Remove this friendship?')) return;
-    this.admin.removeFriend(f.id).subscribe({ next: () => { this.friends = this.friends.filter(x => x.id !== f.id); } });
+    this.admin.removeFriend(f.id).subscribe({ next: () => { this.friends = this.friends.filter(x => x.id !== f.id); this.friendTotal--; } });
   }
   cancel(r: AdminFriendRequest): void {
-    this.admin.cancelFriendRequest(r.id).subscribe({ next: () => { this.requests = this.requests.filter(x => x.id !== r.id); } });
+    this.admin.cancelFriendRequest(r.id).subscribe({ next: () => { this.requests = this.requests.filter(x => x.id !== r.id); this.reqTotal--; } });
   }
   unblock(b: AdminBlock): void {
-    this.admin.unblock(b.id).subscribe({ next: () => { this.blocks = this.blocks.filter(x => x.id !== b.id); } });
+    this.admin.unblock(b.id).subscribe({ next: () => { this.blocks = this.blocks.filter(x => x.id !== b.id); this.blockTotal--; } });
   }
 }

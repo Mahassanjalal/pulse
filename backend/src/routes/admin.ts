@@ -264,16 +264,22 @@ export default async function adminRoutes(app: FastifyInstance) {
   app.get('/reports', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     if (!requireAdmin(authUser)) return forbid(reply);
-    const { status = '' } = req.query as { status?: string };
+    const { status = '', page = '1', limit = '50' } = req.query as { status?: string; page?: string; limit?: string };
     const where: any = {};
     if (status) where.status = status;
+    const skip = (Number(page) - 1) * Number(limit);
 
-    const reports = await prisma.report.findMany({
-      where,
-      include: { reporter: { select: { id: true, username: true } }, reportedUser: { select: { id: true, username: true, trustScore: true, isLocked: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-    return { reports };
+    const [reports, total] = await Promise.all([
+      prisma.report.findMany({
+        where,
+        include: { reporter: { select: { id: true, username: true } }, reportedUser: { select: { id: true, username: true, trustScore: true, isLocked: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: Number(limit),
+      }),
+      prisma.report.count({ where }),
+    ]);
+    return { reports, total, page: Number(page), limit: Number(limit) };
   });
 
   app.get('/reports/:id', { preHandler: authenticate }, async (req, reply) => {
@@ -423,11 +429,16 @@ export default async function adminRoutes(app: FastifyInstance) {
   app.get('/friend-requests', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     if (!requireAdmin(authUser)) return forbid(reply);
-    const { status = '' } = req.query as { status?: string };
+    const { status = '', page = '1', limit = '50' } = req.query as { status?: string; page?: string; limit?: string };
     const where: any = {};
     if (status) where.status = status;
-    const requests = await prisma.friendRequest.findMany({ where, orderBy: { createdAt: 'desc' }, include: { fromUser: { select: { id: true, username: true } }, toUser: { select: { id: true, username: true } } } });
-    return { requests };
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [requests, total] = await Promise.all([
+      prisma.friendRequest.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: Number(limit), include: { fromUser: { select: { id: true, username: true } }, toUser: { select: { id: true, username: true } } } }),
+      prisma.friendRequest.count({ where }),
+    ]);
+    return { requests, total, page: Number(page), limit: Number(limit) };
   });
 
   app.delete('/friend-requests/:id', { preHandler: authenticate }, async (req, reply) => {
@@ -442,8 +453,13 @@ export default async function adminRoutes(app: FastifyInstance) {
   app.get('/blocks', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     if (!requireAdmin(authUser)) return forbid(reply);
-    const blocks = await prisma.blockedUser.findMany({ orderBy: { createdAt: 'desc' }, include: { user: { select: { id: true, username: true } } } });
-    return { blocks };
+    const { page = '1', limit = '50' } = req.query as { page?: string; limit?: string };
+    const skip = (Number(page) - 1) * Number(limit);
+    const [blocks, total] = await Promise.all([
+      prisma.blockedUser.findMany({ orderBy: { createdAt: 'desc' }, skip, take: Number(limit), include: { user: { select: { id: true, username: true } } } }),
+      prisma.blockedUser.count(),
+    ]);
+    return { blocks, total, page: Number(page), limit: Number(limit) };
   });
 
   app.delete('/blocks/:id', { preHandler: authenticate }, async (req, reply) => {

@@ -7,7 +7,7 @@ import { AuthService } from '../../../core/services/auth.service';
 @Component({
   selector: 'pulse-bottom-nav',
   template: `
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/90 backdrop-blur-xl flex items-center justify-around px-2 z-50 border-t border-white/5">
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-bottom))] bg-surface/90 backdrop-blur-xl flex items-center justify-around px-2 z-50 border-t border-white/5 pb-[env(safe-area-inset-bottom)]">
       <a *ngFor="let item of navItems"
          [routerLink]="item.route"
          class="bottom-nav-item"

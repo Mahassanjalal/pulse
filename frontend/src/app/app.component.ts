@@ -17,7 +17,7 @@ import { WebRTCService } from './core/services/webRTC.service';
         <pulse-header />
         <div class="flex pt-20">
           <pulse-sidebar />
-          <main class="flex-1 md:ml-72 overflow-y-auto min-h-[calc(100vh-80px)]">
+          <main class="flex-1 md:ml-72 overflow-y-auto min-h-[calc(100vh-80px)] pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
             <router-outlet></router-outlet>
           </main>
         </div>
@@ -35,6 +35,11 @@ import { WebRTCService } from './core/services/webRTC.service';
         <main class="pt-20">
           <router-outlet></router-outlet>
         </main>
+      </ng-container>
+
+      <!-- Admin console: full-screen self-contained layout (no marketing chrome) -->
+      <ng-container *ngIf="showAdminLayout">
+        <router-outlet></router-outlet>
       </ng-container>
 
       <!-- Premium Modal -->
@@ -87,6 +92,7 @@ export class AppComponent {
   showAuthenticatedLayout = false;
   showVideoChatLayout = false;
   showPublicLayout = true;
+  showAdminLayout = false;
   premiumModalOpen$ = this.premiumModalService.open$;
 
   incomingCall: { callId: string; caller: { id: string; displayName: string; profilePicture?: string } } | null = null;
@@ -222,10 +228,12 @@ export class AppComponent {
     const isVideo = this.videoRoutes.some(r => path.startsWith(r));
     const isProtected = this.protectedRoutes.some(r => path.startsWith(r));
     const isPublic = this.publicRoutes.some(r => path === r || path.startsWith(r + '/'));
+    const isAdmin = path.startsWith('/admin');
 
     this.showVideoChatLayout = isVideo;
-    this.showAuthenticatedLayout = isProtected && !isVideo;
-    this.showPublicLayout = !isVideo && !isProtected;
+    this.showAuthenticatedLayout = isProtected && !isVideo && !isAdmin;
+    this.showPublicLayout = !isVideo && !isProtected && !isAdmin;
+    this.showAdminLayout = isAdmin;
   }
 
   closePremiumModal(): void {

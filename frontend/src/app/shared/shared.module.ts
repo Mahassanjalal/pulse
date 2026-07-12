@@ -6,9 +6,11 @@ import { PlanListComponent } from '@shared/components/plan-list/plan-list.compon
 import { ShaderBgDirective } from '@shared/directives/shader-bg.directive';
 import { ParticlesBgDirective } from '@shared/directives/particles-bg.directive';
 import { FriendCallWidgetComponent } from './components/friend-call-widget/friend-call-widget.component';
+import { AdminPaginatorComponent } from './components/admin-paginator/admin-paginator.component';
 const sharedComponents = [
   PlanListComponent,
-  FriendCallWidgetComponent
+  FriendCallWidgetComponent,
+  AdminPaginatorComponent
 ];
 
 @NgModule({

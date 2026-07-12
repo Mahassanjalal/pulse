@@ -294,10 +294,10 @@ export class AdminService {
   }
 
   // ---- Reports ----
-  listReports(status = ''): Observable<{ reports: AdminReport[] }> {
-    const params: any = {};
+  listReports(status = '', page = 1, limit = 50): Observable<{ reports: AdminReport[]; total: number; page: number; limit: number }> {
+    const params: any = { page: String(page), limit: String(limit) };
     if (status) params.status = status;
-    return this.http.get<{ reports: AdminReport[] }>(`${environment.apiUrl}/admin/reports`, { params });
+    return this.http.get<any>(`${environment.apiUrl}/admin/reports`, { params });
   }
 
   getReport(id: string): Observable<{ report: AdminReportDetail }> {
@@ -355,18 +355,18 @@ export class AdminService {
     return this.http.delete(`${environment.apiUrl}/admin/friends/${id}`);
   }
 
-  listFriendRequests(status = ''): Observable<{ requests: AdminFriendRequest[] }> {
-    const params: any = {};
+  listFriendRequests(status = '', page = 1, limit = 50): Observable<{ requests: AdminFriendRequest[]; total: number; page: number; limit: number }> {
+    const params: any = { page: String(page), limit: String(limit) };
     if (status) params.status = status;
-    return this.http.get<{ requests: AdminFriendRequest[] }>(`${environment.apiUrl}/admin/friend-requests`, { params });
+    return this.http.get<any>(`${environment.apiUrl}/admin/friend-requests`, { params });
   }
 
   cancelFriendRequest(id: string): Observable<any> {
     return this.http.delete(`${environment.apiUrl}/admin/friend-requests/${id}`);
   }
 
-  listBlocks(): Observable<{ blocks: AdminBlock[] }> {
-    return this.http.get<{ blocks: AdminBlock[] }>(`${environment.apiUrl}/admin/blocks`);
+  listBlocks(page = 1, limit = 50): Observable<{ blocks: AdminBlock[]; total: number; page: number; limit: number }> {
+    return this.http.get<any>(`${environment.apiUrl}/admin/blocks`, { params: { page: String(page), limit: String(limit) } });
   }
 
   unblock(id: string): Observable<any> {

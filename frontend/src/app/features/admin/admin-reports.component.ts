@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { SharedModule } from '@shared/shared.module';
 import { AdminService, AdminReport, AdminReportDetail } from '../../core/services/admin.service';
 
 @Component({
@@ -8,7 +9,7 @@ import { AdminService, AdminReport, AdminReportDetail } from '../../core/service
   template: `
     <div class="space-y-md">
       <div class="flex gap-2">
-        <button *ngFor="let s of statuses" (click)="filter = s; load()" class="text-xs px-3 py-1.5 rounded-lg" [ngClass]="filterClass(s)">{{ s }}</button>
+        <button *ngFor="let s of statuses" (click)="filter = s; page = 1; load()" class="text-xs px-3 py-1.5 rounded-lg" [ngClass]="filterClass(s)">{{ s }}</button>
       </div>
 
       <div *ngIf="loading" class="text-center text-on-surface-variant py-lg">Loading…</div>
@@ -27,6 +28,7 @@ import { AdminService, AdminReport, AdminReportDetail } from '../../core/service
           </div>
         </div>
         <div *ngIf="reports.length === 0" class="text-on-surface-variant text-sm">No reports.</div>
+        <pulse-admin-paginator [page]="page" [limit]="limit" [total]="total" (pageChange)="onPage($event)"></pulse-admin-paginator>
       </div>
 
       <div *ngIf="detail" class="glass-panel rounded-2xl p-lg space-y-md">
@@ -54,7 +56,7 @@ import { AdminService, AdminReport, AdminReportDetail } from '../../core/service
 export class AdminReportsComponent implements OnInit {
   reports: AdminReport[] = [];
   statuses = ['', 'PENDING', 'REVIEWED', 'RESOLVED', 'DISMISSED'];
-  filter = '';
+  filter = ''; page = 1; limit = 20; total = 0;
   loading = true; error = '';
   detail: AdminReportDetail | null = null;
 
@@ -64,11 +66,12 @@ export class AdminReportsComponent implements OnInit {
 
   load(): void {
     this.loading = true; this.error = '';
-    this.admin.listReports(this.filter).subscribe({
-      next: (r) => { this.reports = r.reports; this.loading = false; },
+    this.admin.listReports(this.filter, this.page, this.limit).subscribe({
+      next: (r) => { this.reports = r.reports; this.total = r.total; this.loading = false; },
       error: () => { this.error = 'Failed to load reports'; this.loading = false; },
     });
   }
+  onPage(p: number): void { this.page = p; this.load(); }
   filterClass(s: string): string {
     return this.filter === s ? 'bg-primary text-on-primary' : 'bg-white/10';
   }

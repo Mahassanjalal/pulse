@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { SharedModule } from '@shared/shared.module';
 import { AdminService, AdminMessage, AdminMatch } from '../../core/services/admin.service';
 
 @Component({
@@ -13,15 +14,15 @@ import { AdminService, AdminMessage, AdminMatch } from '../../core/services/admi
         <div class="glass-panel rounded-2xl p-md flex flex-wrap items-end gap-md mb-md">
           <div class="flex-1 min-w-[180px]">
             <label class="text-xs text-on-surface-variant uppercase">User id</label>
-            <input [(ngModel)]="userId" (keyup.enter)="loadMessages()" placeholder="filter by user id"
+            <input [(ngModel)]="userId" (keyup.enter)="msgPage = 1; loadMessages()" placeholder="filter by user id"
                    class="w-full mt-1 bg-surface-container text-on-surface rounded-lg px-3 py-2 border border-white/5" />
           </div>
           <div class="flex-1 min-w-[180px]">
             <label class="text-xs text-on-surface-variant uppercase">Match id</label>
-            <input [(ngModel)]="matchId" (keyup.enter)="loadMessages()" placeholder="filter by match id"
+            <input [(ngModel)]="matchId" (keyup.enter)="msgPage = 1; loadMessages()" placeholder="filter by match id"
                    class="w-full mt-1 bg-surface-container text-on-surface rounded-lg px-3 py-2 border border-white/5" />
           </div>
-          <button (click)="loadMessages()" class="px-4 py-2 rounded-lg bg-primary text-on-primary font-label">Search</button>
+          <button (click)="msgPage = 1; loadMessages()" class="px-4 py-2 rounded-lg bg-primary text-on-primary font-label">Search</button>
         </div>
 
         <div *ngIf="msgLoading" class="text-on-surface-variant py-sm">Loading…</div>
@@ -32,6 +33,7 @@ import { AdminService, AdminMessage, AdminMatch } from '../../core/services/admi
           </div>
           <button *ngIf="!m.deleted" (click)="delMessage(m)" class="shrink-0 text-xs px-2 py-1 rounded bg-error/20 text-error hover:bg-error/30">Delete</button>
         </div>
+        <pulse-admin-paginator [page]="msgPage" [limit]="msgLimit" [total]="msgTotal" (pageChange)="onMsgPage($event)"></pulse-admin-paginator>
       </section>
 
       <!-- Matches -->
@@ -48,6 +50,7 @@ import { AdminService, AdminMessage, AdminMatch } from '../../core/services/admi
             <button (click)="delMatch(mt)" class="text-xs px-2 py-1 rounded bg-error/20 text-error hover:bg-error/30">Delete</button>
           </div>
         </div>
+        <pulse-admin-paginator [page]="matchPage" [limit]="matchLimit" [total]="matchTotal" (pageChange)="onMatchPage($event)"></pulse-admin-paginator>
       </section>
     </div>
   `,
@@ -56,6 +59,8 @@ import { AdminService, AdminMessage, AdminMatch } from '../../core/services/admi
 export class AdminContentComponent implements OnInit {
   messages: AdminMessage[] = []; matches: AdminMatch[] = [];
   userId = ''; matchId = ''; msgLoading = true; matchLoading = true;
+  msgPage = 1; msgLimit = 20; msgTotal = 0;
+  matchPage = 1; matchLimit = 20; matchTotal = 0;
 
   constructor(private admin: AdminService) {}
 
@@ -63,22 +68,24 @@ export class AdminContentComponent implements OnInit {
 
   loadMessages(): void {
     this.msgLoading = true;
-    this.admin.listMessages(this.userId, this.matchId).subscribe({
-      next: (r) => { this.messages = r.messages; this.msgLoading = false; },
+    this.admin.listMessages(this.userId, this.matchId, this.msgPage, this.msgLimit).subscribe({
+      next: (r) => { this.messages = r.messages; this.msgTotal = r.total; this.msgLoading = false; },
       error: () => { this.msgLoading = false; },
     });
   }
+  onMsgPage(p: number): void { this.msgPage = p; this.loadMessages(); }
   delMessage(m: AdminMessage): void {
     if (!confirm('Delete this message?')) return;
-    this.admin.deleteMessage(m.id).subscribe({ next: () => { this.messages = this.messages.filter(x => x.id !== m.id); } });
+    this.admin.deleteMessage(m.id).subscribe({ next: () => { this.messages = this.messages.filter(x => x.id !== m.id); this.msgTotal--; } });
   }
   loadMatches(): void {
     this.matchLoading = true;
-    this.admin.listMatches().subscribe({
-      next: (r) => { this.matches = r.matches; this.matchLoading = false; },
+    this.admin.listMatches(this.matchPage, this.matchLimit).subscribe({
+      next: (r) => { this.matches = r.matches; this.matchTotal = r.total; this.matchLoading = false; },
       error: () => { this.matchLoading = false; },
     });
   }
+  onMatchPage(p: number): void { this.matchPage = p; this.loadMatches(); }
   endMatch(mt: AdminMatch): void {
     this.admin.endMatch(mt.id).subscribe({ next: () => { this.loadMatches(); } });
   }

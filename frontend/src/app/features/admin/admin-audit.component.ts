@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { SharedModule } from '@shared/shared.module';
 import { AdminService, AdminAuditEntry } from '../../core/services/admin.service';
 
 @Component({
@@ -18,15 +19,19 @@ import { AdminService, AdminAuditEntry } from '../../core/services/admin.service
           </tr>
         </tbody>
       </table>
+      <pulse-admin-paginator *ngIf="!loading" [page]="page" [limit]="limit" [total]="total" (pageChange)="onPage($event)"></pulse-admin-paginator>
     </div>
   `,
   styles: []
 })
 export class AdminAuditComponent implements OnInit {
   logs: AdminAuditEntry[] = [];
-  loading = true;
+  loading = true; page = 1; limit = 20; total = 0;
   constructor(private admin: AdminService) {}
-  ngOnInit(): void {
-    this.admin.getAuditLog().subscribe({ next: (r) => { this.logs = r.logs; this.loading = false; }, error: () => { this.loading = false; } });
+  ngOnInit(): void { this.load(); }
+  load(): void {
+    this.loading = true;
+    this.admin.getAuditLog(this.page, this.limit).subscribe({ next: (r) => { this.logs = r.logs; this.total = r.total; this.loading = false; }, error: () => { this.loading = false; } });
   }
+  onPage(p: number): void { this.page = p; this.load(); }
 }

@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { SharedModule } from '@shared/shared.module';
 import { AdminService, AdminSubscription, AdminCoinPackage } from '../../core/services/admin.service';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -23,6 +24,7 @@ import { AuthService } from '../../core/services/auth.service';
             </select>
           </div>
         </div>
+        <pulse-admin-paginator [page]="subPage" [limit]="subLimit" [total]="subTotal" (pageChange)="onSubPage($event)"></pulse-admin-paginator>
       </section>
 
       <section *ngIf="isAdmin">
@@ -78,6 +80,7 @@ export class AdminPremiumComponent implements OnInit {
   editing: AdminCoinPackage | null = null;
   modalOpen = false;
   form: AdminCoinPackage = { id: '', name: '', coins: 0, priceUsd: 0, bonus: 0, popular: false };
+  subPage = 1; subLimit = 20; subTotal = 0;
 
   constructor(private admin: AdminService, private auth: AuthService) {}
 
@@ -88,8 +91,9 @@ export class AdminPremiumComponent implements OnInit {
   }
   loadSubs(): void {
     this.subLoading = true;
-    this.admin.listSubscriptions().subscribe({ next: (r) => { this.subs = r.subscriptions; this.subLoading = false; }, error: () => { this.subLoading = false; } });
+    this.admin.listSubscriptions(this.subPage, this.subLimit).subscribe({ next: (r) => { this.subs = r.subscriptions; this.subTotal = r.total; this.subLoading = false; }, error: () => { this.subLoading = false; } });
   }
+  onSubPage(p: number): void { this.subPage = p; this.loadSubs(); }
   loadPkgs(): void {
     this.pkgLoading = true;
     this.admin.listCoinPackages().subscribe({ next: (r) => { this.packages = r.packages; this.pkgLoading = false; }, error: () => { this.pkgLoading = false; } });

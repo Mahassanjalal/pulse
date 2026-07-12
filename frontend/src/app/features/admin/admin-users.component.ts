@@ -9,7 +9,7 @@ import { AuthService } from '../../core/services/auth.service';
   template: `
     <div class="space-y-md">
       <!-- Filters -->
-      <div class="glass-panel rounded-2xl p-md flex flex-wrap items-end gap-md">
+      <div class="glass-panel rounded-2xl p-md flex flex-wrap items-end gap-md mb-6">
         <div class="flex-1 min-w-[200px]">
           <label class="text-xs text-on-surface-variant uppercase tracking-wide">Search</label>
           <input [(ngModel)]="search" (keyup.enter)="load()" placeholder="email, username, name"
