@@ -7,10 +7,12 @@ import jwtPlugin from '@fastify/jwt';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import staticPlugin from '@fastify/static';
+import multipart from '@fastify/multipart';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { prisma } from './lib/prisma';
 import { registerRoutes } from './routes';
+import { ensureUploadDir, UPLOAD_DIR } from './lib/storage';
 import { setupSocketHandlers } from './socket/handlers';
 import { handleStripeWebhook } from './routes/premium';
 import { setNotificationIO } from './lib/notifications';
@@ -75,7 +77,23 @@ async function start() {
     routePrefix: '/docs',
   });
 
+  await app.register(multipart, {
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  });
+
   await registerRoutes(app);
+
+  // Uploaded images (profile pictures, cover images, chat media) are persisted
+  // to disk in UPLOAD_DIR and served from /uploads. In production UPLOAD_DIR
+  // lives inside the Railway `data` volume so files survive deploys. A second
+  // static registration with decorateReply:false avoids clashing with the SPA
+  // plugin's sendFile decoration.
+  ensureUploadDir();
+  await app.register(staticPlugin, {
+    root: UPLOAD_DIR,
+    prefix: '/uploads',
+    decorateReply: false,
+  });
 
   // In production the Angular SPA is built into backend/public and served from
   // the same origin as the API (so environment.prod.ts apiUrl '/api/v1' and the

@@ -14,10 +14,14 @@
     <div class="absolute inset-0 bg-cover bg-center" [style.background-image]="user?.coverImage ? 'url(' + user?.coverImage + ')' : 'url(https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&q=80)'" aria-hidden="true">
     </div>
     <div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent" aria-hidden="true"></div>
+    <button *ngIf="isOwnProfile" (click)="coverInput.click()" type="button" class="absolute top-4 right-4 z-20 bg-surface/80 w-10 h-10 rounded-full flex items-center justify-center border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" aria-label="Change cover image">
+      <span class="material-symbols-outlined text-on-surface" aria-hidden="true">photo</span>
+    </button>
+    <input #coverInput type="file" accept="image/*" class="hidden" (change)="onCoverImageSelected($event)" />
     <div class="absolute bottom-0 left-0 w-full px-xl pb-lg flex flex-col md:flex-row items-end gap-lg">
       <div class="relative group">
         <div class="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-surface overflow-hidden shadow-2xl relative z-10">
-          <img class="w-full h-full object-cover" [src]="user?.profilePicture || 'https://i.pravatar.cc/200?img=7'" [alt]="user?.displayName + ' profile picture'" />
+          <img class="w-full h-full object-cover" [src]="(user?.profilePicture | media) || 'https://i.pravatar.cc/200?img=7'" [alt]="user?.displayName + ' profile picture'" />
         </div>
         <div *ngIf="user?.isVerified" class="absolute bottom-1 right-1 z-20 bg-tertiary w-8 h-8 rounded-full flex items-center justify-center border-2 border-surface" aria-label="Verified user">
           <span class="material-symbols-outlined text-on-tertiary text-sm" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">verified</span>
@@ -26,9 +30,10 @@
           <span class="w-2 h-2 rounded-full" [ngClass]="liveStatus === 'ONLINE' ? 'bg-tertiary pulse-animation' : 'bg-on-surface-variant'" [attr.aria-label]="liveStatus === 'ONLINE' ? 'Online' : 'Offline'"></span>
           <span class="font-bold uppercase tracking-wider" [ngClass]="liveStatus === 'ONLINE' ? 'text-tertiary' : 'text-on-surface-variant'">{{ liveStatus === 'ONLINE' ? 'Online' : 'Offline' }}</span>
         </div>
-        <button *ngIf="isOwnProfile" (click)="startEdit('profilePicture', user?.profilePicture || '')" type="button" class="absolute top-1 right-1 z-20 bg-surface/80 w-8 h-8 rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" aria-label="Change profile picture">
+        <button *ngIf="isOwnProfile" (click)="profilePicInput.click()" type="button" class="absolute bottom-1 right-1 z-20 bg-surface/80 w-8 h-8 rounded-full flex items-center justify-center border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" aria-label="Change profile picture">
           <span class="material-symbols-outlined text-on-surface text-sm" aria-hidden="true">photo_camera</span>
         </button>
+        <input #profilePicInput type="file" accept="image/*" class="hidden" (change)="onProfilePictureSelected($event)" />
       </div>
       <div class="flex-1 pb-md">
         <div class="flex flex-wrap items-center gap-sm mb-xs">
@@ -204,7 +209,7 @@
         <h3 class="font-headline text-headline-md text-on-surface mb-md">Profile Visitors</h3>
         <div class="flex -space-x-3 mb-md">
           <div *ngFor="let visitor of profileVisitors.slice(0, 5)" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface">
-            <img class="w-full h-full object-cover" [src]="visitor.profilePicture || 'https://i.pravatar.cc/60?img=1'" [alt]="visitor.displayName" />
+            <img class="w-full h-full object-cover" [src]="(visitor.profilePicture | media) || 'https://i.pravatar.cc/60?img=1'" [alt]="visitor.displayName" />
           </div>
           <div *ngIf="profileVisitors.length > 5" class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface bg-surface-container flex items-center justify-center" [attr.aria-label]="(profileVisitors.length - 5) + ' more visitors'">
             <span class="font-label text-label-sm text-on-surface-variant">+{{ profileVisitors.length - 5 }}</span>

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import { environment } from '@env/environment';
 import { SocketService } from './socket.service';
 
@@ -26,7 +27,10 @@ export class MatchingService {
   private timer = 0;
   private currentMatchId: string | null = null;
 
-  private matchFound$ = new Subject<MatchData>();
+  // BehaviorSubject (seeded with null) so a freshly-mounted /video page that
+  // subscribes AFTER match_found already fired still receives the live match.
+  // A plain Subject would drop the event and the call would never connect.
+  private matchFound$ = new BehaviorSubject<MatchData | null>(null);
   private statusChange$ = new Subject<string>();
   private timerUpdate$ = new Subject<number>();
   private matchSkipped$ = new Subject<void>();
@@ -91,7 +95,8 @@ export class MatchingService {
   }
 
   get matchFoundObs$(): Observable<MatchData> {
-    return this.matchFound$.asObservable();
+    // Filter the seeded null so consumers only get real matches.
+    return this.matchFound$.asObservable().pipe(filter((m): m is MatchData => !!m));
   }
 
   get timer$(): Observable<number> {

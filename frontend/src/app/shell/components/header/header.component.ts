@@ -3,6 +3,7 @@ import { Router, NavigationEnd } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { PremiumModalService } from '../../../core/services/premium-modal.service';
+import { environment } from '@env/environment';
 import { filter } from 'rxjs/operators';
 
 @Component({
@@ -138,7 +139,9 @@ export class HeaderComponent implements OnInit {
   ngOnInit(): void {
     this.authService.user$.subscribe(user => {
       if (user?.profilePicture) {
-        this.userAvatar = user.profilePicture;
+        this.userAvatar = user.profilePicture.startsWith('/uploads')
+          ? `${environment.apiBase}${user.profilePicture}`
+          : user.profilePicture;
       }
     });
     this.notificationService.notifications$.subscribe(() => {

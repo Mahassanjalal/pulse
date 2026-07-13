@@ -13,6 +13,7 @@ import leaderboardRoutes from './leaderboard';
 import authExtraRoutes from './auth-extra';
 import moderationRoutes from './moderation';
 import coinRoutes from './coins';
+import uploadRoutes from './uploads';
 
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -30,4 +31,5 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(leaderboardRoutes, { prefix: '/api/v1' });
   await app.register(moderationRoutes, { prefix: '/api/v1/moderation' });
   await app.register(coinRoutes, { prefix: '/api/v1/coins' });
+  await app.register(uploadRoutes, { prefix: '/api/v1/uploads' });
 }

@@ -34,3 +34,6 @@ Thumbs.db
 # Prisma
 backend/prisma/*.db
 backend/prisma/*.db-journal
+
+# Uploaded images (local dev only; prod lives in the Railway volume)
+backend/uploads/

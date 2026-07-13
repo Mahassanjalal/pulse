@@ -24,8 +24,20 @@ export const UpdateProfileSchema = z.object({
   country: z.string().optional(),
   languages: z.string().optional(),
   interests: z.string().optional(),
-  profilePicture: z.string().url().optional(),
-  coverImage: z.string().url().optional(),
+  profilePicture: z
+    .string()
+    .refine(
+      (v) => v.startsWith('/') || /^https?:\/\//.test(v),
+      'Must be a relative path (e.g. /uploads/media/...) or an absolute http(s) URL'
+    )
+    .optional(),
+  coverImage: z
+    .string()
+    .refine(
+      (v) => v.startsWith('/') || /^https?:\/\//.test(v),
+      'Must be a relative path (e.g. /uploads/media/...) or an absolute http(s) URL'
+    )
+    .optional(),
 });
 
 export const UpdatePreferencesSchema = z.object({

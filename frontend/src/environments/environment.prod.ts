@@ -1,6 +1,7 @@
 export const environment = {
   production: true,
   apiUrl: '/api/v1',
+  apiBase: '',
   // Derive the WebSocket URL from the page origin so real-time features work
   // in production without a hardcoded host. Assumes the API/WS serve from the
   // same origin; override with a value when hosting WS on a separate domain.

@@ -112,7 +112,7 @@
         <div class="space-y-md">
           <div *ngFor="let req of sentRequests" class="flex items-center gap-md p-md bg-white/5 rounded-xl border border-white/5">
             <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-              <img class="w-full h-full object-cover" [src]="req.toUser?.profilePicture || 'https://i.pravatar.cc/100?img=1'" [alt]="req.toUser?.displayName" />
+              <img class="w-full h-full object-cover" [src]="(req.toUser?.profilePicture | media) || 'https://i.pravatar.cc/100?img=1'" [alt]="req.toUser?.displayName" />
             </div>
             <div class="flex-1 min-w-0">
               <p class="font-label text-label-md text-on-surface truncate">{{ req.toUser?.displayName }}</p>

@@ -49,7 +49,7 @@ import { WebRTCService } from './core/services/webRTC.service';
       <div *ngIf="incomingCall" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md px-lg">
         <div class="w-full max-w-sm glass-panel rounded-3xl border border-white/10 p-xl text-center">
           <div class="w-28 h-28 mx-auto rounded-full overflow-hidden border-2 border-secondary/40 mb-lg pulse-animation">
-            <img class="w-full h-full object-cover" [src]="incomingCall.caller.profilePicture || 'https://i.pravatar.cc/150?img=5'" [alt]="incomingCall.caller.displayName" />
+            <img class="w-full h-full object-cover" [src]="(incomingCall.caller.profilePicture | media) || 'https://i.pravatar.cc/150?img=5'" [alt]="incomingCall.caller.displayName" />
           </div>
           <h3 class="font-headline text-headline-md text-on-surface mb-xs">Incoming video call</h3>
           <p class="font-body text-body-lg text-on-surface-variant mb-xl">{{ incomingCall.caller.displayName }}</p>

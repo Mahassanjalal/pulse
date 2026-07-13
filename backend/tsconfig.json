@@ -1,11 +1,11 @@
 {
   "compilerOptions": {
-    "target": "ES2023",
+    "target": "ES2022",
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "./dist",
     "rootDir": "./src",
-    "lib": ["ES2023"],
+    "lib": ["ES2022"],
 
     "strict": true,
     "noImplicitAny": true,
@@ -22,5 +22,6 @@
     "skipLibCheck": true
   },
 
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/__tests__", "**/*.test.ts"]
 }

@@ -22,8 +22,12 @@
           <div class="flex flex-col md:flex-row gap-lg items-start">
             <div class="relative group shrink-0">
               <div class="w-24 h-24 rounded-2xl overflow-hidden border border-white/10">
-                <img class="w-full h-full object-cover" [src]="profilePicture || 'https://i.pravatar.cc/200?img=1'" alt="Profile picture" />
+                <img class="w-full h-full object-cover" [src]="(profilePicture | media) || 'https://i.pravatar.cc/200?img=1'" alt="Profile picture" />
               </div>
+              <label class="absolute bottom-1 right-1 bg-surface/80 w-8 h-8 rounded-full flex items-center justify-center border border-white/10 cursor-pointer hover:bg-white/10 transition-colors" aria-label="Change profile picture">
+                <span class="material-symbols-outlined text-on-surface text-sm" aria-hidden="true">photo_camera</span>
+                <input type="file" accept="image/*" class="hidden" (change)="onProfilePictureSelected($event)" />
+              </label>
             </div>
             <div class="flex-1 space-y-md w-full">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
@@ -59,12 +63,24 @@
                 </div>
               </div>
               <div class="space-y-xs">
-                <label for="settings-profilePicture" class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Profile Picture URL</label>
-                <input id="settings-profilePicture" [(ngModel)]="profilePicture" class="w-full bg-white/5 border border-white/10 rounded-xl px-md py-sm focus:border-primary outline-none transition-all" type="url" placeholder="https://..." />
+                <label for="settings-profilePicture" class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Profile Picture</label>
+                <div class="flex items-center gap-md">
+                  <label class="cursor-pointer px-md py-sm bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-on-surface">
+                    <span class="material-symbols-outlined text-base align-middle" aria-hidden="true">upload</span> Choose image
+                    <input type="file" accept="image/*" class="hidden" (change)="onProfilePictureSelected($event)" />
+                  </label>
+                  <span *ngIf="profilePicture" class="text-xs text-on-surface-variant truncate">Saved</span>
+                </div>
               </div>
               <div class="space-y-xs">
-                <label for="settings-coverImage" class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Cover Image URL</label>
-                <input id="settings-coverImage" [(ngModel)]="coverImage" class="w-full bg-white/5 border border-white/10 rounded-xl px-md py-sm focus:border-primary outline-none transition-all" type="url" placeholder="https://..." />
+                <label for="settings-coverImage" class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Cover Image</label>
+                <div class="flex items-center gap-md">
+                  <label class="cursor-pointer px-md py-sm bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-on-surface">
+                    <span class="material-symbols-outlined text-base align-middle" aria-hidden="true">upload</span> Choose image
+                    <input type="file" accept="image/*" class="hidden" (change)="onCoverImageSelected($event)" />
+                  </label>
+                  <span *ngIf="coverImage" class="text-xs text-on-surface-variant truncate">Saved</span>
+                </div>
               </div>
               <div class="space-y-xs">
                 <label for="settings-interests" class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Interests (comma-separated)</label>

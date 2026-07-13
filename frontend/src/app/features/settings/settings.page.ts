@@ -5,6 +5,7 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { SharedModule } from '@shared/shared.module';
 import { AuthService } from '../../core/services/auth.service';
 import { UserService } from '../../core/services/user.service';
+import { MediaService } from '../../core/services/media.service';
 
 @Component({
   selector: 'pulse-settings',
@@ -59,7 +60,8 @@ export class SettingsPageComponent implements OnInit {
     private authService: AuthService,
     private router: Router,
     private fb: FormBuilder,
-    private userService: UserService
+    private userService: UserService,
+    private mediaService: MediaService
   ) {}
 
   ngOnInit(): void {
@@ -189,6 +191,27 @@ export class SettingsPageComponent implements OnInit {
         this.savingPreferences = false;
       }
     });
+  }
+
+  private uploadImage(file: File, category: 'avatar' | 'cover'): void {
+    this.mediaService.upload(file, category).subscribe({
+      next: (res) => {
+        if (category === 'avatar') this.profilePicture = res.url;
+        else this.coverImage = res.url;
+        this.saveProfile();
+      },
+      error: () => this.showToast('Failed to upload image')
+    });
+  }
+
+  onProfilePictureSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) this.uploadImage(input.files[0], 'avatar');
+  }
+
+  onCoverImageSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) this.uploadImage(input.files[0], 'cover');
   }
 
   changePassword(): void {

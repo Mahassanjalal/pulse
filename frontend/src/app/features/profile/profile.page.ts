@@ -7,6 +7,7 @@ import { FriendService } from '../../core/services/friend.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PremiumModalService } from '../../core/services/premium-modal.service';
 import { UserService } from '../../core/services/user.service';
+import { MediaService } from '../../core/services/media.service';
 import { UserProfile } from '@models/user.model';
 import { environment } from '@env/environment';
 
@@ -51,7 +52,8 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
     private presenceService: PresenceService,
     private premiumModalService: PremiumModalService,
     private router: Router,
-    private userService: UserService
+    private userService: UserService,
+    private mediaService: MediaService
   ) {}
 
   @HostListener('window:beforeunload', ['$event'])
@@ -214,6 +216,33 @@ export class ProfilePageComponent implements OnInit, OnDestroy {
         this.showToast('Failed to save changes');
       }
     });
+  }
+
+  uploadImage(file: File, field: 'profilePicture' | 'coverImage'): void {
+    if (!this.isOwnProfile) return;
+    this.mediaService.upload(file, field === 'profilePicture' ? 'avatar' : 'cover').subscribe({
+      next: (res) => {
+        this.userService.updateProfile({ [field]: res.url }).subscribe({
+          next: () => {
+            if (this.user) (this.user as any)[field] = res.url;
+            this.authService.fetchCurrentUser().subscribe();
+            this.showToast(field === 'profilePicture' ? 'Profile picture updated' : 'Cover image updated');
+          },
+          error: () => this.showToast('Failed to save image')
+        });
+      },
+      error: () => this.showToast('Failed to upload image')
+    });
+  }
+
+  onProfilePictureSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) this.uploadImage(input.files[0], 'profilePicture');
+  }
+
+  onCoverImageSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) this.uploadImage(input.files[0], 'coverImage');
   }
 
   addInterest(): void {

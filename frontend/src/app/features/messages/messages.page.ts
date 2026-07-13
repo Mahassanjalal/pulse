@@ -5,6 +5,8 @@ import { SocketService } from '../../core/services/socket.service';
 import { FriendService } from '../../core/services/friend.service';
 import { CallService } from '../../core/services/call.service';
 import { CallSoundService } from '../../core/services/call-sound.service';
+import { MediaService } from '../../core/services/media.service';
+import { WebRTCService } from '../../core/services/webRTC.service';
 import { Subscription, Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { Conversation, Friend } from '@models/user.model';
 
@@ -35,7 +37,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private callService: CallService,
-    private callSoundService: CallSoundService
+    private callSoundService: CallSoundService,
+    private mediaService: MediaService,
+    private webRTCService: WebRTCService
   ) {}
 
   ngOnInit(): void {
@@ -78,6 +82,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
           this.messages.push({
             id: msg.id,
             text: msg.content,
+            type: msg.type || 'TEXT',
             self: msg.senderId === userId,
             time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           });
@@ -191,6 +196,24 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     this.chatService.sendMessage(this.activeChat, content);
   }
 
+  onImageSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) this.sendImage(input.files[0]);
+    input.value = '';
+  }
+
+  sendImage(file: File): void {
+    if (!this.activeChat || this.chatError) return;
+    this.mediaService.upload(file, 'message').subscribe({
+      next: (res) => {
+        this.chatService.sendMessage(this.activeChat!, res.url, 'IMAGE');
+      },
+      error: () => {
+        this.chatError = 'Could not upload image.';
+      }
+    });
+  }
+
   openFriendPicker(): void {
     this.friendService.loadFriends();
     this.showFriendPicker = true;
@@ -247,7 +270,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   callFriend(): void {
     const conv = this.getActiveConversation();
     if (!conv) return;
+    // Acquire camera/mic inside the click gesture so the browser permits it.
     this.callSoundService.unlock();
+    this.webRTCService.init();
     this.socketService.callFriend(conv.peer.id);
     this.callService.start({
       callId: '',
