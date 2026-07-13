@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.log
+
+# Local SQLite databases (never commit; Prisma manages these)
+*.db
+*.db-journal
+prisma/data/
+prisma/dev.db
+prisma/dev.db-journal
+
+# Uploaded media (lives in the Railway `data` volume in prod)
+uploads/
+
+# Local env secrets (Railway injects via dashboard / dotenvx)
+.env
+.env.local
