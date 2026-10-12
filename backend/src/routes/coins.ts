@@ -4,6 +4,7 @@ import { authenticate, getAuthUser } from '../middleware/auth';
 import { stripe, isStripeConfigured } from '../lib/stripe';
 import { NotificationService, isBlocked } from '../lib/notifications';
 import { adjustCoins, spendCoins } from '../lib/coins';
+import { claimPaymentEvent } from '../lib/payments';
 
 // Coin catalog: à-la-carte impulse actions. Prices are intentionally modest
 // to encourage repeat spending; these never gate core premium features.
@@ -102,14 +103,24 @@ export default async function coinRoutes(app: FastifyInstance) {
     }
 
     const session = await stripe.checkout.sessions.retrieve(session_id);
+    
+    // Ownership check: only the buyer may claim this session (audit C4).
+    if (session.metadata?.userId !== authUser.id) {
+      return reply.status(403).send({ error: 'This checkout session belongs to another account' });
+    }
+    
     let granted = 0;
     if (session.payment_status === 'paid' || session.status === 'complete') {
       const meta = session.metadata as { packageId?: string } | null;
       const pkg = resolveCoinPackage(meta?.packageId);
-      if (pkg) granted = await adjustCoins(authUser.id, pkg.coins + pkg.bonus, 'PURCHASE', pkg.id);
+      // Idempotency: the session id may claim coins exactly once. Previously
+      // every poll re-granted the package — unlimited free coins (audit C4).
+      if (pkg && (await claimPaymentEvent(session_id, authUser.id, 'COINS', pkg.id))) {
+        granted = await adjustCoins(authUser.id, pkg.coins + pkg.bonus, 'PURCHASE', pkg.id);
+      }
     }
 
-    return { coins: granted, isPremium: authUser.isPremium };
+    return { coins: granted, balance: (await prisma.user.findUnique({ where: { id: authUser.id }, select: { coins: true } }))?.coins ?? authUser.coins, isPremium: authUser.isPremium };
   });
 
   // POST /api/v1/coins/gift - Send a gift to another user during/after a match.

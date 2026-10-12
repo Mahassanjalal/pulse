@@ -8,6 +8,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import staticPlugin from '@fastify/static';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { prisma } from './lib/prisma';
@@ -17,8 +18,13 @@ import { setupSocketHandlers } from './socket/handlers';
 import { handleStripeWebhook } from './routes/premium';
 import { setNotificationIO } from './lib/notifications';
 import requestLogger from './plugins/request-logger';
+import { revokeExpiredPremium } from './routes/premium';
 
+// M17: honor X-Forwarded-For from the platform load balancer so req.ip (used
+// by rate limiters, login history and audit logs) is the real client IP, not
+// the LB. Without this, rate limits and IP audit trails are spoofable/useless.
 const app = fastify({
+  trustProxy: true,
   logger: process.env.NODE_ENV !== 'production' ? {
     transport: {
       target: 'pino-pretty',
@@ -28,8 +34,18 @@ const app = fastify({
 });
 
 async function start() {
+  // CORS: primary origin + optional comma-separated APP_ORIGINS allowlist
+  // (for preview domains / alternate frontends in production).
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:4200',
+    ...(process.env.APP_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean),
+  ];
   await app.register(cors, {
-    origin: process.env.FRONTEND_URL || 'http://localhost:4200',
+    origin: (origin, cb) => {
+      // Same-origin / server-to-server requests have no Origin header.
+      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+      cb(null, false);
+    },
     credentials: true,
   });
 
@@ -39,6 +55,17 @@ async function start() {
   });
 
   await app.register(requestLogger);
+
+  // M1: global HTTP rate limit as a backstop (per-route tightening lives in
+  // each route via lib/limits.ts). In-memory store = per-node; swap for a
+  // Redis store when running multiple nodes (AUDIT-AND-PLAN Phase 2).
+  await app.register(rateLimit, {
+    global: true,
+    max: Number(process.env.RATE_LIMIT_MAX || 300),
+    timeWindow: '1 minute',
+    keyGenerator: (req) => (req as any).authUser?.id || req.ip,
+    allowList: (req) => (req.raw.url || '').startsWith('/api/v1/health') || (req.raw.url || '') === '/health',
+  });
 
   app.decorateRequest('authUser', null);
 
@@ -54,6 +81,10 @@ async function start() {
     }
   });
 
+  // M14: don't expose the API schema in production unless explicitly asked.
+  const swaggerEnabled = process.env.SWAGGER_ENABLED === 'true' ||
+    (process.env.NODE_ENV !== 'production' && process.env.SWAGGER_ENABLED !== 'false');
+  if (swaggerEnabled) {
   await app.register(swagger, {
     openapi: {
       info: {
@@ -76,6 +107,7 @@ async function start() {
   await app.register(swaggerUi, {
     routePrefix: '/docs',
   });
+  }
 
   await app.register(multipart, {
     limits: { fileSize: 10 * 1024 * 1024, files: 1 },
@@ -124,10 +156,14 @@ async function start() {
 
   const io = new SocketIOServer(app.server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:4200',
+      origin: allowedOrigins,
       credentials: true,
     },
     transports: ['websocket'],
+    // M1: chat messages are capped at 5,000 chars by the schema; cap the
+    // transport buffer well below the 1MB default so a malicious client can't
+    // push megabyte frames at the server.
+    maxHttpBufferSize: 100 * 1024,
   });
 
   app.decorate('io', io);
@@ -180,6 +216,18 @@ async function start() {
 
   setupSocketHandlers(io, app);
 
+  // H8: nothing enforced premium expiry before — lapsed subscribers kept
+  // perks forever. Sweep daily (and once at boot).
+  const sweepExpiredPremium = () => {
+    revokeExpiredPremium()
+      .then((count) => {
+        if (count > 0) app.log.info({ revoked: count }, 'Revoked expired premium subscriptions');
+      })
+      .catch((err) => app.log.error({ err }, 'Premium expiry sweep failed'));
+  };
+  sweepExpiredPremium();
+  const premiumSweep = setInterval(sweepExpiredPremium, 24 * 60 * 60 * 1000);
+
   const PORT = Number(process.env.PORT) || 3000;
   await app.listen({ port: PORT, host: '0.0.0.0' });
 
@@ -188,6 +236,7 @@ async function start() {
 
   const shutdown = async () => {
     app.log.info('Shutting down gracefully...');
+    clearInterval(premiumSweep);
     io.close();
     await app.close();
     process.exit(0);

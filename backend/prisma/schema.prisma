@@ -80,6 +80,25 @@ model User {
   profileVisitors       ProfileView[] @relation("ProfileVisitors")
   otpCodes              OtpCode[]
   resetTokens           ResetToken[]
+
+  @@index([status])
+  @@index([trustScore])
+  @@index([isPremium, premiumUntil])
+  @@index([createdAt])
+}
+
+// Idempotency ledger for payment-driven grants. One row per Stripe
+// checkout session (or webhook event id) — a grant only happens when the row
+// is first inserted, so retries / repeated status polls can never double-grant
+// coins, premium, or an account unlock.
+model PaymentEvent {
+  id        String   @id // Stripe checkout session id OR webhook event id
+  userId    String
+  purpose   String // COINS | PREMIUM | UNLOCK
+  refId     String? // package id / plan id
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model PrivacySettings {
@@ -137,10 +156,19 @@ model Match {
   isFavorite      Boolean @default(false)
   canReconnect    Boolean @default(true)
   reconnectCount  Int @default(0)
-  
+
+  // User ids that locally hid/deleted this conversation (soft delete — the
+  // peer keeps their history and moderation evidence is preserved).
+  deletedFor String @default("[]")
+
   messages    Message[]
-  
+
   createdAt   DateTime @default(now())
+
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Message {
@@ -162,6 +190,10 @@ model Message {
   deleted    Boolean @default(false)
   
   createdAt  DateTime @default(now())
+
+  @@index([matchId, createdAt])
+  @@index([senderId])
+  @@index([receiverId, read])
 }
 
 model Friend {
@@ -207,6 +239,9 @@ model Notification {
   data      String?
   
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
 }
 
 model BlockedUser {
@@ -218,8 +253,9 @@ model BlockedUser {
   reason        String?
   
   createdAt     DateTime @default(now())
-  
+
   @@unique([userId, blockedUserId])
+  @@index([blockedUserId])
 }
 
 model Report {

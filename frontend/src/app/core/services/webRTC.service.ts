@@ -19,20 +19,55 @@ export class WebRTCService {
   private connectionStateSubject = new Subject<string>();
   private cameraErrorSubject = new Subject<string | null>();
 
-  private iceServers: RTCConfiguration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      // TURN relays (with temp credentials, e.g. from a short-lived backend
-      // token) let media traverse symmetric NATs / strict firewalls where
-      // STUN-only peer-to-peer fails. For production scale (many concurrent
-      // calls) replace P2P with an SFU (e.g. mediasoup/LiveKit) that relays
-      // through TURN-independent infrastructure instead of burning TURN
-      // bandwidth per call.
-      ...(environment.turnServers ?? []),
-    ]
-  };
+  // M9: TURN/STUN servers are resolved per call. The static list below is a
+  // dev fallback only; in production the backend mints SHORT-LIVED HMAC
+  // credentials for our own coturn fleet via /webrtc/turn-credentials
+  // (previously the app shipped a hardcoded public relay credential).
+  private staticIceServers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    ...(environment.turnServers ?? []),
+  ];
+  private cachedIce: RTCConfiguration | null = null;
+  private iceFetchedAt = 0;
+
+  private get iceServers(): RTCConfiguration {
+    return this.cachedIce ?? { iceServers: this.staticIceServers };
+  }
+
+  /**
+   * Fetch TURN credentials from the backend (cached for their TTL, refreshed
+   * a minute early). Falls back to the static/dev list on any failure so
+   * calls still work, just with lower connectivity success behind strict NATs.
+   */
+  private async ensureIceServers(): Promise<RTCConfiguration> {
+    const now = Date.now();
+    if (this.cachedIce && now < this.iceFetchedAt) return this.cachedIce;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('no token');
+      const res = await fetch(`${environment.apiUrl}/webrtc/turn-credentials`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data?.configured && Array.isArray(data.iceServers) && data.iceServers.length) {
+        const ttlMs = Math.max((data.ttl || 3600) * 1000 - 60_000, 60_000);
+        this.cachedIce = { iceServers: data.iceServers };
+        this.iceFetchedAt = now + ttlMs;
+        return this.cachedIce;
+      }
+      // Backend has no TURN configured (dev) — use the static list.
+      this.cachedIce = { iceServers: this.staticIceServers };
+      this.iceFetchedAt = now + 5 * 60_000;
+      return this.cachedIce;
+    } catch {
+      this.cachedIce = { iceServers: this.staticIceServers };
+      this.iceFetchedAt = now + 60_000;
+      return this.cachedIce;
+    }
+  }
 
   constructor(private socketService: SocketService) {
     this.socketService.on('webrtc_offer').subscribe(async (data: any) => {
@@ -149,7 +184,8 @@ export class WebRTCService {
     this.currentMatchId = matchId;
     this.pendingCandidates = [];
     this.pendingOffer = null;
-    this.peerConnection = new RTCPeerConnection(this.iceServers);
+    const ice = await this.ensureIceServers();
+    this.peerConnection = new RTCPeerConnection(ice);
 
     this.remoteStream = new MediaStream();
     this.remoteStreamSubject.next(this.remoteStream);

@@ -125,12 +125,28 @@ export default async function friendRoutes(app: FastifyInstance) {
       data: { status: 'ACCEPTED' },
     });
     
-    const friend = await prisma.friend.create({
-      data: {
-        senderId: friendRequest.fromUserId,
-        receiverId: friendRequest.toUserId,
-      },
-    });
+    let friend;
+    try {
+      friend = await prisma.friend.create({
+        data: {
+          senderId: friendRequest.fromUserId,
+          receiverId: friendRequest.toUserId,
+        },
+      });
+    } catch (err: any) {
+      // Double-accept race (two tabs): the unique constraint already created
+      // the friendship — resolve it instead of 500ing.
+      if (err?.code === 'P2002') {
+        friend = (await prisma.friend.findFirst({
+          where: {
+            senderId: friendRequest.fromUserId,
+            receiverId: friendRequest.toUserId,
+          },
+        }))!;
+      } else {
+        throw err;
+      }
+    }
     
     await prisma.user.update({ where: { id: friendRequest.fromUserId }, data: { friendsCount: { increment: 1 } } });
     await prisma.user.update({ where: { id: friendRequest.toUserId }, data: { friendsCount: { increment: 1 } } });
@@ -163,13 +179,20 @@ export default async function friendRoutes(app: FastifyInstance) {
   });
 
   app.post('/requests/:id/reject', { preHandler: authenticate }, async (req) => {
+    const authUser = getAuthUser(req)!;
     const { id } = req.params as { id: string };
     
-    await prisma.friendRequest.update({
-      where: { id },
+    // Only the RECIPIENT may reject a request — previously any authenticated
+    // user could reject arbitrary pending requests by id (IDOR), and a
+    // missing id crashed with a 500.
+    const result = await prisma.friendRequest.updateMany({
+      where: { id, toUserId: authUser.id, status: 'PENDING' },
       data: { status: 'REJECTED' },
     });
     
+    if (result.count === 0) {
+      return { success: false, error: 'Friend request not found' };
+    }
     return { success: true };
   });
 

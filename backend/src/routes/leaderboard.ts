@@ -13,6 +13,8 @@ export default async function leaderboardRoutes(app: FastifyInstance) {
 
     const allowed = ['conversations', 'friends', 'reputation', 'activity'];
     const cat = allowed.includes(category) ? category : 'conversations';
+    // Clamp: unbounded limit let any caller sort the entire user table.
+    const take = Math.min(Math.max(Number(limit) || 20, 1), 50);
 
     const orderBy = (cat === 'conversations' ? { totalConversations: 'desc' as const }
       : cat === 'friends' ? { friendsCount: 'desc' as const }
@@ -22,7 +24,7 @@ export default async function leaderboardRoutes(app: FastifyInstance) {
     const users = await prisma.user.findMany({
       where: { isGuest: false, id: { not: authUser.id } },
       orderBy,
-      take: Number(limit),
+      take,
       select: {
         id: true,
         displayName: true,

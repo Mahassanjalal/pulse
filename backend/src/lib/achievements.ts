@@ -52,18 +52,30 @@ export async function unlockAchievement(
   }
 
   const unlocked = progress >= def.maxProgress;
-  await prisma.userAchievement.create({
-    data: {
-      userId,
-      name: def.name,
-      description: def.description,
-      icon: def.icon,
-      progress: Math.min(progress, def.maxProgress),
-      maxProgress: def.maxProgress,
-      unlocked,
-      unlockedAt: unlocked ? new Date() : null,
-    },
-  });
+  try {
+    await prisma.userAchievement.create({
+      data: {
+        userId,
+        name: def.name,
+        description: def.description,
+        icon: def.icon,
+        progress: Math.min(progress, def.maxProgress),
+        maxProgress: def.maxProgress,
+        unlocked,
+        unlockedAt: unlocked ? new Date() : null,
+      },
+    });
+  } catch (err: any) {
+    // M13: two concurrent unlocks of the same achievement used to crash with a
+    // unique-constraint violation. Treat it as "someone else created it" and
+    // fall through to the update path below.
+    if (err?.code !== 'P2002') throw err;
+    const winner = await prisma.userAchievement.update({
+      where: { userId_name: { userId, name: def.name } },
+      data: { progress: Math.min(progress, def.maxProgress), unlocked, unlockedAt: unlocked ? new Date() : null },
+    });
+    return winner.unlocked;
+  }
 
   if (unlocked) {
     // Lazy import to avoid a static cycle with notifications.ts.

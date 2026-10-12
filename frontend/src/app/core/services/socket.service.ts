@@ -14,6 +14,34 @@ export class SocketService implements OnDestroy {
   // attach the same listener twice (e.g. across reconnects or re-calls).
   private attached = new Set<string>();
   private heartbeatInterval: any = null;
+  private refreshingAuth = false;
+
+  /**
+   * Refresh the access token over HTTP (same endpoint the AuthInterceptor
+   * uses) and persist the rotated pair. Returns null when no refresh token is
+   * stored or the refresh fails.
+   */
+  private async refreshAuthToken(): Promise<{ token: string; refreshToken: string } | null> {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return null;
+    try {
+      const res = await fetch(`${environment.apiUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data?.token) return null;
+      localStorage.setItem('token', data.token);
+      // Rotation: the server issues a new refresh token and invalidates the
+      // old one — persist it or the next refresh fails.
+      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+      return { token: data.token, refreshToken: data.refreshToken || refreshToken };
+    } catch {
+      return null;
+    }
+  }
 
   // Core events we always want a socket listener for once connected. Any event
   // already subscribed via on() before connect() runs is attached too (see
@@ -37,7 +65,11 @@ export class SocketService implements OnDestroy {
     if (!token || !userId) return;
 
     this.socket = io(environment.wsUrl, {
-      auth: { token, userId },
+      // H7: the access token lasts 15 minutes; send the refresh token too so
+      // the server can re-authenticate a reconnecting socket when the access
+      // token has expired (previously reconnects failed permanently and
+      // realtime silently died until a full page reload).
+      auth: { token, userId, refreshToken: localStorage.getItem('refreshToken') || undefined },
       transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 1000,
@@ -53,6 +85,31 @@ export class SocketService implements OnDestroy {
       this.stopHeartbeat();
     });
     this.socket.on('reconnect_attempt', () => this.connectionState$.next('reconnecting'));
+
+    // H7: if the server rejects our handshake (expired access token without a
+    // usable refresh token in auth), refresh credentials over HTTP and retry
+    // with the fresh pair before the retry budget runs out.
+    this.socket.on('connect_error', async (err: any) => {
+      const msg = String(err?.message || '');
+      if (!/token/i.test(msg) || this.refreshingAuth) return;
+      this.refreshingAuth = true;
+      try {
+        const fresh = await this.refreshAuthToken();
+        if (fresh && this.socket) {
+          this.socket.auth = {
+            token: fresh.token,
+            userId: localStorage.getItem('userId'),
+            refreshToken: fresh.refreshToken,
+          };
+          this.socket.connect();
+        }
+      } catch {
+        // Give up quietly — reconnection attempts will keep trying with the
+        // stored credentials; the app's HTTP layer handles hard session death.
+      } finally {
+        this.refreshingAuth = false;
+      }
+    });
 
     // Attach listeners for every core event AND any event already subscribed to
     // via on() (e.g. AppComponent's incoming_call, which subscribed before

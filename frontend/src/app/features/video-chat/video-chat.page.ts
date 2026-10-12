@@ -5,6 +5,7 @@ import { MatchingService, MatchData } from '../../core/services/matching.service
 import { WebRTCService } from '../../core/services/webRTC.service';
 import { SocketService } from '../../core/services/socket.service';
 import { CallService } from '../../core/services/call.service';
+import { ReportService, ReportCategory, REPORT_CATEGORIES } from '../../core/services/report.service';
 
 @Component({
   selector: 'pulse-video-chat',
@@ -31,6 +32,13 @@ export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit 
   chatMessages: { text: string; self: boolean; time: string }[] = [];
   toastMessage: string | null = null;
   connectionState = '';
+  // Safety UI (C7): report modal + block flow available mid-call.
+  reportOpen = false;
+  reportCategory: ReportCategory = 'NUDITY';
+  reportDetails = '';
+  reportCategories = REPORT_CATEGORIES;
+  submittingReport = false;
+  private blockingPeer = false;
   connectionStateColor = '';
   hadPreviousMatch = false;
   private toastTimeout: any = null;
@@ -48,7 +56,8 @@ export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit 
     private webRTCService: WebRTCService,
     private socketService: SocketService,
     private router: Router,
-    private callService: CallService
+    private callService: CallService,
+    private reportService: ReportService
   ) {}
 
   ngOnInit(): void {
@@ -58,6 +67,13 @@ export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit 
 
     this.subscriptions.push(
       this.matchingService.matchFoundObs$.subscribe(async (peer) => {
+        // H14: direct friend calls also emit `match_found`, but they are owned
+        // by the floating FriendCallWidget. Reacting here as well created a
+        // SECOND peer connection that replaced the widget's (breaking the
+        // call). Bail out when a direct call is live, and ignore duplicate
+        // events for the match we're already handling.
+        if (this.callService.current) return;
+        if (this.currentMatchId === peer.matchId) return;
         this.currentPeer = peer;
         this.currentMatchId = peer.matchId;
         this.hadPreviousMatch = true;
@@ -171,7 +187,12 @@ export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit 
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(s => s.unsubscribe());
-    this.webRTCService.disconnect();
+    // H14: WebRTCService is a singleton shared with the friend-call widget.
+    // Tearing it down here used to kill an active friend call whenever the
+    // user navigated away from /video. Only release media for random matches.
+    if (!this.callService.current) {
+      this.webRTCService.disconnect();
+    }
     if (this.toastTimeout) clearTimeout(this.toastTimeout);
   }
 
@@ -223,6 +244,67 @@ export class VideoChatPageComponent implements OnInit, OnDestroy, AfterViewInit 
       this.socketService.sendFriendRequest(this.currentPeer.userId);
       this.showToast('Friend request sent!');
     }
+  }
+
+  // ---------------- Safety: report & block (C7) ----------------
+
+  openReport(): void {
+    if (!this.currentPeer) return;
+    this.reportCategory = 'NUDITY';
+    this.reportDetails = '';
+    this.reportOpen = true;
+  }
+
+  closeReport(): void {
+    this.reportOpen = false;
+  }
+
+  async submitReport(): Promise<void> {
+    if (!this.currentPeer || this.submittingReport) return;
+    this.submittingReport = true;
+    try {
+      const details = this.reportDetails.trim() ||
+        `Reported for ${this.reportCategory} during a video call.`;
+      await this.reportService.report(this.currentPeer.userId, this.reportCategory, details);
+      this.reportOpen = false;
+      this.showToast('Report submitted. Thank you for keeping Pulse safe.');
+      // Leave the call immediately after reporting — the user asked out.
+      this.leaveAfterSafetyAction();
+    } catch {
+      this.showToast('Could not submit report. Please try again.');
+    } finally {
+      this.submittingReport = false;
+    }
+  }
+
+  async blockPeer(): Promise<void> {
+    if (!this.currentPeer || this.blockingPeer) return;
+    this.blockingPeer = true;
+    try {
+      await this.reportService.block(this.currentPeer.userId);
+      this.showToast('User blocked.');
+      // Blocking also excludes them from future matches (server-side) and
+      // ends the current call.
+      this.leaveAfterSafetyAction();
+    } catch {
+      this.showToast('Could not block user. Please try again.');
+    } finally {
+      this.blockingPeer = false;
+    }
+  }
+
+  private leaveAfterSafetyAction(): void {
+    this.reportOpen = false;
+    const wasDirect = !!this.callService.current;
+    if (wasDirect) {
+      // Hand the hang-up to the widget's call flow.
+      this.callService.clear();
+    } else if (this.currentMatchId) {
+      this.matchingService.skipMatch();
+    }
+    this.currentPeer = null;
+    this.currentMatchId = null;
+    this.webRTCService.disconnect();
   }
 
   goBack(): void {

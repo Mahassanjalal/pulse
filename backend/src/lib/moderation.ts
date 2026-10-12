@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { kickUser } from './realtime';
 
 export const UNLOCK_PRICE_USD = 10;
 
@@ -13,6 +14,10 @@ export async function lockAccount(userId: string, reason: string): Promise<void>
     where: { id: userId },
     data: { isLocked: true, lockReason: reason, lockUnlockedAt: null, status: 'OFFLINE' },
   });
+  // M11: previously a locked user's live sockets kept matching/calling until
+  // they happened to reconnect. Kick every socket now and purge them from any
+  // matchmaking queue / pending call.
+  kickUser(userId, 'ACCOUNT_LOCKED');
 }
 
 /** Unlock a previously locked account (e.g. after the $10 unlock payment). */

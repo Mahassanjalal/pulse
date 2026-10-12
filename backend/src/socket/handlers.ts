@@ -5,6 +5,13 @@ import { prisma } from '../lib/prisma';
 import { NotificationService, isBlocked } from '../lib/notifications';
 import { getPeerId, findFriendRequest } from '../lib/relations';
 import { unlockAchievement, type AchievementKey } from '../lib/achievements';
+import { SendMessageSchema } from '../lib/validators';
+import { hit } from '../lib/limits';
+import { setRealtimeHooks } from '../lib/realtime';
+
+// Active Socket.IO server reference, set in setupSocketHandlers. Used by the
+// kickUser realtime hook (account locks, moderation).
+let activeIo: Server | null = null;
 
 async function unlockConversationAchievements(userId: string, total: number): Promise<void> {
   await unlockAchievement(userId, 'first_conversation', 1);
@@ -47,6 +54,37 @@ const peerSelect = {
   isVerified: true,
   isPremium: true,
 };
+
+/**
+ * Tear down an in-memory active match (DB update + events to both peers).
+ * Shared by end/skip handlers and the moderation kick path.
+ */
+async function teardownMatch(
+  io: Server,
+  matchId: string,
+  reason: 'ended' | 'skipped' | 'moderation',
+): Promise<void> {
+  const match = activeMatches.get(matchId);
+  if (!match) return;
+  activeMatches.delete(matchId);
+
+  const duration = Math.floor((Date.now() - match.startTime) / 1000);
+  try {
+    await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        status: reason === 'skipped' ? 'SKIPPED' : 'ENDED',
+        endTime: new Date(),
+        duration,
+      },
+    });
+  } catch (err) {
+    console.error('teardownMatch db error:', err);
+  }
+
+  io.to(`user_${match.user1}`).emit(reason === 'skipped' ? 'match_skipped' : 'match_ended', { matchId, reason });
+  io.to(`user_${match.user2}`).emit(reason === 'skipped' ? 'match_skipped' : 'match_ended', { matchId, reason });
+}
 
 function isUserInMatch(userId: string): boolean {
   for (const m of activeMatches.values()) {
@@ -103,16 +141,81 @@ function resetHeartbeat(socket: Socket, userId: string): void {
 }
 
 export function setupSocketHandlers(io: Server, app: FastifyInstance) {
+  activeIo = io;
+
+  // Wire moderation hooks: locking an account now force-disconnects every
+  // live socket for that user and purges them from queues/pending calls
+  // (M11) instead of letting them keep matching until a natural reconnect.
+  setRealtimeHooks({
+    kickUser: (userId: string, reason: string) => {
+      // Purge matchmaking state first so no new match can be created.
+      waitingUsers.delete(userId);
+      claimedUsers.delete(userId);
+
+      // Cancel pending direct calls involving the user.
+      for (const [callId, pending] of pendingCalls.entries()) {
+        if (pending.callerId === userId || pending.calleeId === userId) {
+          const timer = pendingCallTimers.get(callId);
+          if (timer) clearTimeout(timer);
+          pendingCallTimers.delete(callId);
+          pendingCalls.delete(callId);
+          const otherId = pending.callerId === userId ? pending.calleeId : pending.callerId;
+          if (pending.callerId === userId) {
+            io.to(`user_${otherId}`).emit('call_cancelled', { callId });
+          } else {
+            io.to(`user_${otherId}`).emit('call_declined', { callId });
+          }
+        }
+      }
+
+      // End any active match cleanly so the peer isn't left hanging.
+      for (const [matchId, match] of activeMatches.entries()) {
+        if (match.user1 === userId || match.user2 === userId) {
+          void teardownMatch(io, matchId, 'moderation');
+        }
+      }
+
+      // Force-disconnect every socket for the user.
+      const conns = userConnections.get(userId);
+      if (conns) {
+        for (const socketId of conns) {
+          const s = io.sockets.sockets.get(socketId);
+          s?.disconnect(true);
+        }
+        userConnections.delete(userId);
+      }
+    },
+  });
+
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token as string;
+      const refreshToken = socket.handshake.auth.refreshToken as string | undefined;
       if (!token) {
         return next(new Error('Authentication token required'));
       }
 
-      const decoded = app.jwt.verify<{ userId: string }>(token);
+      let userId: string;
+      try {
+        userId = app.jwt.verify<{ userId: string }>(token).userId;
+      } catch (err) {
+        // H7: the access token (15 min) used to be the ONLY credential the
+        // socket accepted. After it expired, any reconnect failed permanently
+        // ("Invalid or expired token") and realtime silently died until a full
+        // page reload. Fall back to the refresh token so a reconnecting client
+        // can transparently re-authenticate.
+        if (!refreshToken) return next(new Error('Invalid or expired token'));
+        const tokenRecord = await prisma.refreshToken.findUnique({
+          where: { token: refreshToken },
+        });
+        if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+          return next(new Error('Invalid or expired token'));
+        }
+        userId = tokenRecord.userId;
+      }
+
       const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
+        where: { id: userId },
         select: { id: true, status: true, gender: true, isPremium: true, isLocked: true },
       });
 
@@ -151,6 +254,12 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // Start heartbeat timer
     resetHeartbeat(socket, userId);
 
+    // M4: the old heartbeat wrote `lastSeen` to the DB on EVERY beat (every
+    // 30s per user — ~16k writes/s at 500k users). Liveness now lives in
+    // memory and the DB write is throttled to at most once per minute per
+    // socket; the write also no longer races with presence updates.
+    let lastSeenWriteAt = 0;
+
     // If this is the first connection, mark as ONLINE and broadcast
     if (wasOffline) {
       prisma.user.update({
@@ -167,10 +276,14 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
     socket.on('heartbeat', () => {
       resetHeartbeat(socket, userId);
-      prisma.user.update({
-        where: { id: userId },
-        data: { lastSeen: new Date() },
-      }).catch(() => {});
+      const now = Date.now();
+      if (now - lastSeenWriteAt > 60_000) {
+        lastSeenWriteAt = now;
+        prisma.user.update({
+          where: { id: userId },
+          data: { lastSeen: new Date() },
+        }).catch(() => {});
+      }
       socket.emit('pong');
     });
 
@@ -217,6 +330,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         targetGender = roll < 0.75 ? userGender : (userGender === 'MALE' ? 'FEMALE' : 'MALE');
       }
 
+      try {
       for (const [waitingUserId, waitingData] of waitingUsers) {
         if (waitingUserId !== userId) {
           // Reserve both parties synchronously BEFORE any await so a concurrent
@@ -281,6 +395,14 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
             },
           });
 
+          // The handshake window is over — release the claims. Previously
+          // they were NEVER released after a successful match, so after one
+          // completed/skipped match both users stayed in `claimedUsers` and
+          // every future candidate skipped them: matching silently stopped
+          // working until a full reconnect.
+          claimedUsers.delete(waitingUserId);
+          claimedUsers.delete(userId);
+
           activeMatches.set(match.id, { user1: waitingUserId, user2: userId, matchId: match.id, startTime: Date.now() });
 
           io.to(waitingData.socketId).emit('match_found', {
@@ -320,6 +442,15 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           return;
         }
       }
+      } catch (err) {
+        // Any mid-handshake failure (e.g. DB error) must not leave stale
+        // claims or drop the user on the floor: release and re-queue.
+        console.error('start_matching error:', err);
+        claimedUsers.delete(userId);
+        waitingUsers.set(userId, { socketId: socket.id, filters: isPremium ? data?.filters : undefined });
+        socket.emit('error', { message: 'Matchmaking error. Please try again.' });
+        return;
+      }
 
       socket.emit('matching_queue', { queuePosition: waitingUsers.size, status: 'waiting' });
     });
@@ -328,10 +459,14 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       waitingUsers.delete(userId);
       claimedUsers.delete(userId);
 
-      await prisma.user.update({
-        where: { id: userId },
-        data: { status: 'ONLINE' },
-      });
+      // H10: don't clobber status when the user is actually inside an active
+      // match (multi-tab / raced events used to flip them ONLINE mid-call).
+      if (!isUserInMatch(userId)) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { status: 'ONLINE' },
+        });
+      }
 
       socket.emit('matching_cancelled');
     });
@@ -587,6 +722,9 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       const otherUserId = getPeerId(match, userId);
       activeMatches.delete(data.matchId);
+      // Release handshake claims (see start_matching note).
+      claimedUsers.delete(userId);
+      claimedUsers.delete(otherUserId);
 
       await Promise.all([
         prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
@@ -615,16 +753,33 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const match = activeMatches.get(data.matchId);
       if (!match) return;
 
+      // M1: the socket path previously accepted ANY content/type unvalidated
+      // (the REST schema existed but was unused here) — up to Socket.IO's 1MB
+      // buffer per message. Validate with the shared schema and rate-limit.
+      const parsed = SendMessageSchema.safeParse({
+        matchId: data?.matchId,
+        content: data?.content,
+        type: data?.type || 'TEXT',
+      });
+      if (!parsed.success) {
+        socket.emit('error', { message: 'Invalid message' });
+        return;
+      }
+      if (!hit(`match_msg:${userId}`, 30, 10_000)) {
+        socket.emit('error', { message: 'You are sending messages too fast' });
+        return;
+      }
+
       try {
         const otherUserId = getPeerId(match, userId);
 
         const message = await prisma.message.create({
           data: {
-            matchId: data.matchId,
+            matchId: parsed.data.matchId,
             senderId: userId,
             receiverId: otherUserId,
-            content: data.content,
-            type: (data.type as any) || 'TEXT',
+            content: parsed.data.content,
+            type: parsed.data.type as any,
           },
         });
 
@@ -635,7 +790,15 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       }
     });
 
+    let lastTypingAt = 0;
     socket.on('typing', async (data: { matchId: string; isTyping: boolean }) => {
+      // M3: typing fires frequently; throttle per socket so a chatty client
+      // can't amplify into a DB query storm (the REST-conversation fallback
+      // below hits the database).
+      const now = Date.now();
+      if (now - lastTypingAt < 400) return;
+      lastTypingAt = now;
+
       let otherUserId: string | undefined;
 
       const match = activeMatches.get(data.matchId);
@@ -672,6 +835,14 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       const otherUserId = getPeerId(match, userId);
       activeMatches.delete(data.matchId);
+      // H10: skipping used to leave both users' status stuck at MATCHING.
+      // Release handshake claims too (see start_matching note).
+      claimedUsers.delete(userId);
+      claimedUsers.delete(otherUserId);
+      await Promise.all([
+        prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE' } }).catch(() => {}),
+        prisma.user.update({ where: { id: otherUserId }, data: { status: 'ONLINE' } }).catch(() => {}),
+      ]);
 
       io.to(`user_${otherUserId}`).emit('match_skipped', { matchId: data.matchId });
       socket.emit('match_ended', { matchId: data.matchId, reason: 'skipped' });
@@ -690,6 +861,9 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       const otherUserId = getPeerId(match, userId);
       activeMatches.delete(data.matchId);
+      // Release handshake claims (see start_matching note).
+      claimedUsers.delete(userId);
+      claimedUsers.delete(otherUserId);
 
       await Promise.all([
         prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
@@ -798,8 +972,13 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         heartbeatTimers.delete(socket.id);
       }
 
-      // Remove from waiting pool
-      waitingUsers.delete(userId);
+      // Remove from waiting pool — but ONLY if THIS socket is the one that
+      // queued the user (H11). Previously any secondary tab closing silently
+      // un-queued the still-connected primary tab, which then never matched.
+      const queued = waitingUsers.get(userId);
+      if (queued && queued.socketId === socket.id) {
+        waitingUsers.delete(userId);
+      }
       claimedUsers.delete(userId);
 
       // Clean up any pending calls involving this user. Only act on the last

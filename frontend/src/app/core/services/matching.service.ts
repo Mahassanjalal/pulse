@@ -72,12 +72,17 @@ export class MatchingService {
       this.status = 'idle';
       this.statusChange$.next('idle');
       this.stopTimer();
+      // H13: clear the replayed match. matchFound$ is a BehaviorSubject, so
+      // without this a fresh /video page re-subscribed to the LAST match's
+      // dead peer and tried to signal a matchId the server no longer knows.
+      this.matchFound$.next(null);
     });
 
     this.socketService.on('match_skipped').subscribe(() => {
       this.status = 'idle';
       this.statusChange$.next('idle');
       this.stopTimer();
+      this.matchFound$.next(null);
       this.matchSkipped$.next();
     });
 
@@ -86,6 +91,7 @@ export class MatchingService {
       this.statusChange$.next('idle');
       this.stopTimer();
       this.currentMatchId = null;
+      this.matchFound$.next(null);
       this.matchEnded$.next(data);
     });
   }

@@ -69,6 +69,10 @@ export default async function moderationRoutes(app: FastifyInstance) {
     }
 
     const session = await stripe.checkout.sessions.retrieve(session_id);
+    // Only the payer may use this session to unlock (audit C4 ownership).
+    if (session.metadata?.userId !== authUser.id || session.metadata?.purpose !== 'UNLOCK') {
+      return reply.status(403).send({ error: 'This checkout session belongs to another account' });
+    }
     if (session.payment_status === 'paid' || session.status === 'complete') {
       await unlockAccount(authUser.id);
     }
@@ -80,10 +84,15 @@ export default async function moderationRoutes(app: FastifyInstance) {
     return { isLocked: user?.isLocked || false };
   });
 
-  // Dev-mode direct unlock (no payment) for testing.
-  app.post('/unlock', { preHandler: authenticate }, async (req) => {
+  // POST /api/v1/moderation/unlock - Direct unlock with no payment. DEV ONLY:
+  // this previously existed in production and let anyone bypass the $10
+  // unlock entirely (audit C5).
+  app.post('/unlock', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
+    if (isStripeConfigured) {
+      return reply.status(403).send({ error: 'Use /moderation/unlock-checkout to unlock', code: 'PAYMENT_REQUIRED' });
+    }
     await unlockAccount(authUser.id);
-    return { unlocked: true };
+    return { devMode: true, unlocked: true };
   });
 }

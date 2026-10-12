@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { withRealCounts } from '../lib/user';
 import { RegisterSchema, LoginSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
+import { hit } from '../lib/limits';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -69,19 +70,40 @@ export default async function authRoutes(app: FastifyInstance) {
           },
         });
       } else {
-        // New user - create with Google
-        user = await prisma.user.create({
-          data: {
-            email,
-            username: email.split('@')[0] + '_' + uuidv4().slice(0, 4),
-            displayName,
-            googleId,
-            authProvider: 'GOOGLE',
-            password: '',
-            profilePicture,
-            status: 'ONLINE',
-          },
-        });
+        // New user - create with Google. The username suffix is short and can
+        // collide under concurrent signups — retry with a longer suffix rather
+        // than surfacing a 500 (audit H16).
+        try {
+          user = await prisma.user.create({
+            data: {
+              email,
+              username: email.split('@')[0] + '_' + uuidv4().slice(0, 4),
+              displayName,
+              googleId,
+              authProvider: 'GOOGLE',
+              password: '',
+              profilePicture,
+              status: 'ONLINE',
+            },
+          });
+        } catch (err: any) {
+          if (err?.code === 'P2002') {
+            user = await prisma.user.create({
+              data: {
+                email,
+                username: email.split('@')[0] + '_' + uuidv4().slice(0, 8),
+                displayName,
+                googleId,
+                authProvider: 'GOOGLE',
+                password: '',
+                profilePicture,
+                status: 'ONLINE',
+              },
+            });
+          } else {
+            throw err;
+          }
+        }
         isNewUser = true;
       }
     }
@@ -142,26 +164,38 @@ export default async function authRoutes(app: FastifyInstance) {
     
     const hashedPassword = await argon2.hash(data.password);
     
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        username: data.username,
-        displayName: data.displayName || data.username,
-        password: hashedPassword,
-        age: data.age,
-        gender: data.gender,
-        country: data.country,
-      },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        displayName: true,
-        isPremium: true,
-        isVerified: true,
-        role: true,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: data.email,
+          username: data.username,
+          displayName: data.displayName || data.username,
+          password: hashedPassword,
+          age: data.age,
+          gender: data.gender,
+          country: data.country,
+        },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          displayName: true,
+          isPremium: true,
+          isVerified: true,
+          role: true,
+        },
+      });
+    } catch (err: any) {
+      // Concurrent registrations can both pass the findFirst check above —
+      // the DB unique constraint is the real arbiter (audit H16). Return 409,
+      // not 500.
+      if (err?.code === 'P2002') {
+        reply.status(409);
+        return { error: 'Email or username already exists' };
+      }
+      throw err;
+    }
     
     const token = app.jwt.sign({ userId: user.id }, { expiresIn: '15m' });
     const refreshToken = uuidv4();
@@ -256,13 +290,28 @@ export default async function authRoutes(app: FastifyInstance) {
     });
     
     if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+      // Opportunistic cleanup so the table can't grow unbounded (M12).
+      await prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
       reply.status(401);
       return { error: 'Invalid or expired refresh token' };
     }
     
-    const newToken = app.jwt.sign({ userId: tokenRecord.userId }, { expiresIn: '15m' });
+    // Rotate: the used refresh token is single-use. Deleting it here limits
+    // the replay window if a token is later stolen, and a new one is issued
+    // to keep the session alive for the legitimate client.
+    await prisma.refreshToken.delete({ where: { id: tokenRecord.id } });
     
-    return { token: newToken };
+    const newToken = app.jwt.sign({ userId: tokenRecord.userId }, { expiresIn: '15m' });
+    const newRefreshToken = uuidv4();
+    await prisma.refreshToken.create({
+      data: {
+        token: newRefreshToken,
+        userId: tokenRecord.userId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    
+    return { token: newToken, refreshToken: newRefreshToken };
   });
 
   // POST /api/v1/auth/logout
@@ -327,8 +376,22 @@ export default async function authRoutes(app: FastifyInstance) {
     return { user: await withRealCounts(authUser.id, user!) };
   });
 
-  // POST /api/v1/auth/guest - Continue as guest
-  app.post('/guest', async (req) => {
+  // POST /api/v1/auth/guest - Continue as guest.
+  // Each call creates a brand-new user row, so this endpoint is an unbounded
+  // DB-flood / fake-online vector without limits (audit H15). It is now
+  // rate-limited per IP and disabled in production unless explicitly enabled.
+  app.post('/guest', async (req, reply) => {
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_GUEST_LOGIN !== 'true') {
+      reply.status(403);
+      return { error: 'Guest login is disabled. Create an account to continue.' };
+    }
+    
+    const ip = req.ip || 'unknown';
+    if (!hit(`guest:${ip}`, 5, 60 * 60 * 1000)) {
+      reply.status(429);
+      return { error: 'Too many guest sessions. Please create an account.' };
+    }
+    
     const guestId = 'guest_' + uuidv4().slice(0, 8);
     
     const user = await prisma.user.create({

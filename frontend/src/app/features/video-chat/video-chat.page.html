@@ -118,6 +118,16 @@
           <button *ngIf="status === 'matched'" (click)="addFriend()" type="button" class="w-12 h-12 rounded-full glass-panel border border-white/10 text-tertiary flex items-center justify-center hover:bg-tertiary/10 transition-all active:scale-95">
             <span class="material-symbols-outlined">person_add</span>
           </button>
+
+          <!-- Safety controls (always visible mid-call per store policy) -->
+          <button *ngIf="status === 'matched'" (click)="openReport()" type="button" title="Report user"
+            class="w-12 h-12 rounded-full glass-panel border border-white/10 text-error flex items-center justify-center hover:bg-error/10 transition-all active:scale-95">
+            <span class="material-symbols-outlined">flag</span>
+          </button>
+          <button *ngIf="status === 'matched' && currentPeer" (click)="blockPeer()" type="button" title="Block user"
+            class="w-12 h-12 rounded-full glass-panel border border-white/10 text-error flex items-center justify-center hover:bg-error/10 transition-all active:scale-95">
+            <span class="material-symbols-outlined">block</span>
+          </button>
           <!-- Toggle Chat -->
           <button (click)="toggleChat()" type="button" class="w-12 h-12 rounded-full glass-panel border border-white/10 text-secondary flex items-center justify-center hover:bg-secondary/10 transition-all active:scale-95">
             <span class="material-symbols-outlined md:hidden">chat_bubble</span>
@@ -180,6 +190,34 @@
           <span class="material-symbols-outlined text-on-secondary-container text-sm" style="font-variation-settings: 'FILL' 1;">send</span>
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Report Modal (safety) -->
+<div *ngIf="reportOpen" class="fixed inset-0 z-50 bg-surface/80 backdrop-blur-xl flex items-center justify-center p-lg">
+  <div class="glass-panel border border-white/10 rounded-2xl w-full max-w-md p-xl space-y-lg">
+    <h3 class="font-headline text-headline-md text-on-surface">Report user</h3>
+    <p class="font-label text-label-md text-on-surface-variant">What happened? Reports are confidential and help keep Pulse safe.</p>
+    <div class="space-y-sm max-h-60 overflow-y-auto">
+      <label *ngFor="let c of reportCategories"
+        class="flex items-center gap-md px-md py-sm rounded-xl cursor-pointer hover:bg-white/5 transition-all"
+        [ngClass]="{ 'bg-error/10': reportCategory === c.id }">
+        <input type="radio" name="reportCategory" [value]="c.id" [(ngModel)]="reportCategory" class="accent-error" />
+        <span class="text-sm text-on-surface">{{ c.label }}</span>
+      </label>
+    </div>
+    <textarea [(ngModel)]="reportDetails" rows="3" placeholder="Add details (optional)"
+      class="w-full bg-surface-container/40 border border-white/5 rounded-xl p-md text-on-surface text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:border-error transition-all"></textarea>
+    <div class="flex gap-md justify-end">
+      <button (click)="closeReport()" type="button"
+        class="px-lg py-md glass-panel text-on-surface rounded-xl font-label text-label-md border border-white/10 hover:bg-white/10 transition-all">
+        Cancel
+      </button>
+      <button (click)="submitReport()" type="button" [disabled]="submittingReport"
+        class="px-lg py-md bg-error text-on-primary rounded-xl font-label text-label-md hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
+        {{ submittingReport ? 'Sending…' : 'Submit report' }}
+      </button>
     </div>
   </div>
 </div>

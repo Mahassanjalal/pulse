@@ -4,7 +4,7 @@ import { withRealCounts } from '../lib/user';
 import { getFriendIds } from '../lib/relations';
 import { UpdateProfileSchema, UpdatePreferencesSchema, UpdatePrivacySettingsSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
-import { adjustCoins } from '../lib/coins';
+import { adjustCoins, ApiError } from '../lib/coins';
 
 export default async function userRoutes(app: FastifyInstance) {
   app.get('/:id', async (req, reply) => {
@@ -245,34 +245,70 @@ export default async function userRoutes(app: FastifyInstance) {
     return { stats: await withRealCounts(authUser.id, user!), onlineCount, trending };
   });
 
-  // POST /me/daily-reward - Claim daily reward
+  // POST /me/daily-reward - Claim daily reward.
+  // H9: the old implementation read the claim timestamp, checked it, then
+  // granted coins and updated the timestamp in SEPARATE statements — parallel
+  // requests both passed the check (double reward) and a failure between the
+  // two left coins and streak out of sync. The claim is now a single
+  // conditional transaction, and streak math uses UTC calendar days instead
+  // of an exact 86,400,000 ms gap (which broke across DST transitions).
   app.post('/me/daily-reward', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
     const REWARD_COINS = 10;
-    const now = new Date();
 
-    const user = await prisma.user.findUnique({ where: { id: authUser.id } });
-    if (!user) return reply.status(404).send({ error: 'User not found' });
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: authUser.id },
+        select: { lastDailyClaim: true, dailyStreak: true },
+      });
+      if (!user) return null;
 
-    const lastClaim = user.lastDailyClaim;
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const lastClaimDay = lastClaim ? new Date(lastClaim.getFullYear(), lastClaim.getMonth(), lastClaim.getDate()) : null;
+      const now = new Date();
+      const utcDayStart = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+      const today = utcDayStart(now);
+      const last = user.lastDailyClaim ? utcDayStart(user.lastDailyClaim) : null;
 
-    if (lastClaimDay && lastClaimDay.getTime() === today.getTime()) {
-      return reply.status(400).send({ error: 'Already claimed today' });
-    }
+      if (last === today) return { alreadyClaimed: true as const };
 
-    const isConsecutive = lastClaimDay && (today.getTime() - lastClaimDay.getTime()) === 86400000;
-    const newStreak = isConsecutive ? user.dailyStreak + 1 : 1;
+      // Consecutive when the last claim was exactly one UTC calendar day ago.
+      const isConsecutive = last !== null && today - last === 86_400_000;
+      const newStreak = isConsecutive ? user.dailyStreak + 1 : 1;
 
-    const balance = await adjustCoins(authUser.id, REWARD_COINS, 'DAILY_REWARD');
+      // Conditional update: only succeeds if nobody else claimed today
+      // (guards against concurrent duplicate claims even across processes
+      // once this runs on Postgres).
+      const claimed = await tx.user.updateMany({
+        where: {
+          id: authUser.id,
+          OR: [{ lastDailyClaim: null }, { lastDailyClaim: { lt: new Date(today) } }],
+        },
+        data: { dailyStreak: newStreak, lastDailyClaim: now },
+      });
+      if (claimed.count === 0) return { alreadyClaimed: true as const };
 
-    await prisma.user.update({
-      where: { id: authUser.id },
-      data: { dailyStreak: newStreak, lastDailyClaim: now },
+      // Ledger-backed credit inside the same transaction.
+      const affected = await tx.$executeRaw`
+        UPDATE "User" SET "coins" = "coins" + ${REWARD_COINS}
+        WHERE "id" = ${authUser.id}`;
+      if (affected === 0) throw new ApiError(500, 'Failed to credit reward');
+      const after = await tx.user.findUnique({ where: { id: authUser.id }, select: { coins: true } });
+      await tx.coinTransaction.create({
+        data: {
+          userId: authUser.id,
+          amount: REWARD_COINS,
+          reason: 'DAILY_REWARD' as any,
+          balanceAfter: after!.coins,
+        },
+      });
+
+      return { alreadyClaimed: false as const, coins: after!.coins, dailyStreak: newStreak };
     });
 
-    return { coins: balance, dailyStreak: newStreak };
+    if (!result) return reply.status(404).send({ error: 'User not found' });
+    if (result.alreadyClaimed) {
+      return reply.status(400).send({ error: 'Already claimed today' });
+    }
+    return { coins: result.coins, dailyStreak: result.dailyStreak };
   });
 
   // GET /me/visitors - Profile visitors

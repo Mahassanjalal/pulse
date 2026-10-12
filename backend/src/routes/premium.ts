@@ -4,6 +4,7 @@ import { authenticate, getAuthUser } from '../middleware/auth';
 import { stripe, isStripeConfigured } from '../lib/stripe';
 import { unlockAccount } from '../lib/moderation';
 import { adjustCoins } from '../lib/coins';
+import { claimPaymentEvent } from '../lib/payments';
 import { resolveCoinPackage } from './coins';
 
 const PLANS = [
@@ -101,6 +102,27 @@ export async function revokePremium(userId: string): Promise<void> {
   });
 }
 
+/**
+ * H8: premium expiry enforcement. Nothing previously flipped isPremium when
+ * premiumUntil passed, so lapsed subscribers kept perks forever. Called from a
+ * daily sweep in server.ts (and cheap enough to also check on auth).
+ * Returns the number of accounts revoked.
+ */
+export async function revokeExpiredPremium(): Promise<number> {
+  const now = new Date();
+  const result = await prisma.user.updateMany({
+    where: { isPremium: true, premiumUntil: { lt: now } },
+    data: { isPremium: false },
+  });
+  if (result.count > 0) {
+    await prisma.subscription.updateMany({
+      where: { isActive: true, endDate: { lt: now } },
+      data: { isActive: false },
+    });
+  }
+  return result.count;
+}
+
 export default async function premiumRoutes(app: FastifyInstance) {
   // GET /api/v1/premium/plans - Get available subscription plans
   app.get('/plans', async () => {
@@ -174,11 +196,24 @@ export default async function premiumRoutes(app: FastifyInstance) {
     }
 
     const session = await stripe.checkout.sessions.retrieve(session_id);
+    
+    // Ownership check: only the user who created the session may claim it
+    // (audit C4 — previously any authenticated user could pass any session_id).
+    if (session.metadata?.userId !== authUser.id) {
+      return reply.status(403).send({ error: 'This checkout session belongs to another account' });
+    }
+    
     if (session.payment_status === 'paid' || session.status === 'complete') {
       const meta = session.metadata as { planId?: string; period?: string } | null;
       const plan = PLANS.find(p => p.id === meta?.planId);
       if (plan && meta?.period) {
-        await grantPremium(authUser.id, plan, meta.period);
+        // Idempotent: the session id can only ever grant once, so repeatedly
+        // polling this endpoint (or racing the webhook) can't re-extend
+        // premium. The webhook uses the event id as its own separate claim.
+        const claimed = await claimPaymentEvent(session_id, authUser.id, 'PREMIUM', plan.id);
+        if (claimed) {
+          await grantPremium(authUser.id, plan, meta.period);
+        }
       }
     }
 
@@ -189,9 +224,17 @@ export default async function premiumRoutes(app: FastifyInstance) {
     return { isPremium: user?.isPremium || false, premiumUntil: user?.premiumUntil };
   });
 
-  // POST /api/v1/premium/subscribe - Direct subscribe (dev/testing fallback).
+  // POST /api/v1/premium/subscribe - Direct subscribe. DEVELOPMENT ONLY:
+  // previously this granted premium with no payment in every environment
+  // (audit C3) — anyone with a token could give themselves premium for free.
+  // Production must use /create-checkout.
   app.post('/subscribe', { preHandler: authenticate }, async (req, reply) => {
     const authUser = getAuthUser(req)!;
+    
+    if (isStripeConfigured) {
+      return reply.status(403).send({ error: 'Use /premium/create-checkout to subscribe', code: 'PAYMENT_REQUIRED' });
+    }
+    
     const { planId, period = 'monthly' } = req.body as { planId: string; period?: string };
 
     const plan = resolvePlan(planId);
@@ -200,7 +243,7 @@ export default async function premiumRoutes(app: FastifyInstance) {
     }
 
     const subscription = await grantPremium(authUser.id, plan, period);
-    return { subscription };
+    return { devMode: true, subscription };
   });
 
   // POST /api/v1/premium/cancel - Cancel subscription
@@ -240,6 +283,23 @@ export async function handleStripeWebhook(req: any, reply: any): Promise<void> {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as any;
     const userId = session.metadata?.userId;
+    const purpose: 'PREMIUM' | 'UNLOCK' | 'COINS' =
+      session.metadata?.purpose === 'UNLOCK' ? 'UNLOCK'
+      : session.metadata?.purpose === 'COINS' ? 'COINS'
+      : 'PREMIUM';
+    
+    // Stripe retries deliveries: claim the EVENT id first so a retry can never
+    // double-grant coins/premium (audit C4). This is a separate claim key from
+    // the session-id claim used by the status-poll path, so both paths
+    // together still grant exactly once.
+    if (userId) {
+      const claimed = await claimPaymentEvent(event.id, userId, purpose, session.metadata?.packageId || session.metadata?.planId);
+      if (!claimed) {
+        req.log?.info?.({ eventId: event.id }, 'Stripe webhook event already processed — skipping');
+        return reply.send({ received: true, duplicate: true });
+      }
+    }
+    
     const planId = session.metadata?.planId;
     const period = session.metadata?.period || 'monthly';
     const plan = resolvePlan(planId);
