@@ -2,7 +2,7 @@
 
 > Full-system review of the Pulse codebase (Fastify + Prisma/SQLite + Socket.IO backend, Angular 16 frontend) against a target of **500,000 concurrent users**, benchmarked against Azar, HOLLA, OmeTV, Chatrandom, Emerald Chat, Chatroulette, Monkey, LivU and Paltalk (2025–26 product research).
 >
-> Date: 2026-10-12 · Status: **Phase 0 + selected Phase-1 code fixes IMPLEMENTED** (see "Implementation log" at the bottom).
+> Date: 2026-10-12 (Phase 0) / 2026-10-13 (Phase 1) · Status: **Phase 0 (security) + Phase 1 (data layer: Postgres + Redis) IMPLEMENTED** (see implementation logs below).
 
 ## Implementation log (2026-10-12, this session)
 
@@ -53,15 +53,40 @@
 - Live smoke against SQLite: register (incl. duplicate→409), login, refresh-rotation (old token → 401 on reuse), guest (dev), OTP dev flow.
 - Migration applied via `prisma migrate dev`.
 
+## Implementation log (2026-10-13, Phase 1 — data layer)
+
+**Postgres + Redis are wired in and verified live end-to-end, including two server nodes pairing users across a shared Redis queue.** The committed default remains SQLite (`scripts/use-db.sh` flips providers) so local dev is unchanged.
+
+### Shipped — realtime state + multi-node
+- **State store abstraction** (`src/lib/state/`): `queue` (waiting users), `active matches`, `pending calls`, `socket registry` and presence/leases now go through one `StateStore` interface with two implementations — **memory** (default, identical to previous single-node behavior, used by tests/dev) and **Redis** (enabled by `REDIS_URL`). Durable records stay in Postgres/SQLite; ephemeral state moves out of process.
+- **Socket.IO Redis adapter** (`@socket.io/redis-adapter`) wired in `server.ts` with graceful fallback to the local adapter when `REDIS_URL` is unset — broadcasts (`match_found`, `presence_changed`, signaling, kicks) now cross nodes.
+- **Matching-engine fixes found by the new E2E tests**: a queue **sweeper** (periodic rescan) + **gender-grace widening** so mixed-gender pairs can no longer dead-lock in the queue (previously only the joining user's gender roll was checked and nobody re-scanned); claims released on skip/end/error; in-match status checks now O(1) via the store.
+- Heartbeat/presence writes are served from Redis when configured (no per-heartbeat DB writes).
+
+### Shipped — Postgres provider
+- `scripts/use-db.sh sqlite|postgres` — provider swap + `prisma generate` (committed schema stays on **sqlite**; deploys/CI switch).
+- `prisma/postgres-baseline.sql` — full PG DDL generated from the Prisma schema (`prisma migrate diff --from-empty`), for bootstrapping empty PG databases (Prisma cannot migrate across providers).
+- `scripts/copy-sqlite-to-pg.py` — idempotent schema+data migration (FK-safe order, epoch→timestamp + boolean casts, `ON CONFLICT DO NOTHING`).
+- `scripts/pglite-wire.mjs` — local verification harness: runs **real Postgres (PGlite/WASM) behind the wire protocol** so the PG path can be tested with no system install. Quirk documented in the script: use `?connection_limit=1` — the PGlite socket multiplexer drops *concurrent* connection handshakes, and Prisma opens a 2nd connection during `Promise.all` otherwise.
+- The Phase-0 atomic coin update and `withRealCounts` queries are already Postgres-safe.
+
+### Infra
+- `infra/docker-compose.yml` — Postgres 16 + Redis 7 (+ optional PgBouncer via `--profile pooler`) for staging/production-shaped local runs.
+
+### Verified (live, this session)
+- **On Postgres (PGlite wire) + Redis**: register → login → `/auth/me` → dashboard (multi-table `Promise.all`) → notifications, rapid ×5 (single-conn pool stable), duplicate-register of a **migrated** row → 409 (pre-existing SQLite data visible), 49 rows migrated from `dev.db`.
+- **Socket E2E on that stack**: two real clients matched, skipped, re-matched (`scripts/e2e-match.mjs` → PASS).
+- **Cross-node**: two separate server processes sharing only Redis pair users across nodes and deliver `match_found` cross-node (`scripts/e2e-cross-node.mjs` → PASS); store conformance suite runs against memory **and** real Redis (same tests, both green).
+
 ### Still open (needs infra / next phases)
-- H1/H2 full realization (Postgres + Redis + multi-node Socket.IO adapter + SFU) — code is now *ready* for it (no unguarded in-process state removal yet; the matching engine still uses in-process Maps and must move to Redis sorted sets per Phase 3).
+- **Phase 2+**: load-test socket density per node, native ping/pong heartbeat, reconnect-storm drills.
+- **Phase 3**: replace the FIFO queue scan with Redis sorted-set queues (atomic `ZPOPMIN` dequeue, TTL leases, premium lanes) — the store seam is in place.
+- H1/H2 remainder: uploads still local disk (M8 → R2/S3), message ids still UUIDs (keyset cursor works; ULID is the cleaner fix).
 - M5 `/discover` & dashboard trending still sort the whole user table (now indexed; revisit with proper feeds).
 - M7 `withRealCounts` per profile view (needs cached counters).
-- M8 Uploads still on local disk (move to R2/S3 + re-encode).
 - M10 admin role-value validation.
 - M15/M16 privacy review + text moderation filter.
 - On-device blur-before-accept and sampled-frame moderation (Phase 5).
-
 
 ---
 

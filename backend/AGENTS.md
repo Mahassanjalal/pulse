@@ -3,7 +3,7 @@
 Scope: `/backend`. For product context see root `AGENTS.md`. This file is authoritative when working in this folder.
 
 ## Stack
-Node.js + TypeScript (CommonJS). **Fastify v5**, **Prisma v5** (SQLite `prisma/dev.db`), **Socket.IO v4**, **Zod v4**, **argon2**, **@fastify/jwt**, **Stripe v17** (optional), **google-auth-library**, **Pino**.
+Node.js + TypeScript (CommonJS). **Fastify v5**, **Prisma v5** (SQLite `prisma/dev.db` by default; Postgres via `scripts/use-db.sh`), **Socket.IO v4** + `@socket.io/redis-adapter`, **Redis** (`redis`, optional — enabled by `REDIS_URL`), **Zod v4**, **argon2**, **@fastify/jwt**, **Stripe v17** (optional), **google-auth-library**, **Pino**.
 
 ## Scripts
 - `npm run dev` — tsx watch `src/server.ts` (port 3000)
@@ -12,6 +12,10 @@ Node.js + TypeScript (CommonJS). **Fastify v5**, **Prisma v5** (SQLite `prisma/d
 - `npm run seed` — demo data (`src/seed.ts`)
 - `npm test` — Vitest
 - Swagger UI at `http://localhost:3000/docs`
+- `./scripts/use-db.sh sqlite|postgres` — switch Prisma provider + regenerate
+- `node scripts/e2e-match.mjs` / `e2e-cross-node.mjs` — live matching E2E (needs a running server; cross-node needs 2 + Redis)
+- `node scripts/pglite-wire.mjs` — WASM Postgres over the wire protocol for PG verification without a system install (use `?connection_limit=1`)
+- `DATABASE_URL=... ./scripts/copy-sqlite-to-pg.py` — migrate dev.db schema+data into Postgres
 
 ## Layout
 ```
@@ -51,15 +55,15 @@ src/
 - Premium: `grantPremium()` sets `isPremium` + `premiumUntil`; dev-mode (no Stripe key) grants directly.
 
 ## Matching engine (socket/handlers.ts)
-- `waitingUsers: Map<userId, {socketId, filters?>`; `activeMatches: Map<matchId, {user1,user2,matchId,startTime}>`.
-- On `start_matching`: set status MATCHING, scan waiting pool, skip blocked / gender-mismatch, create `Match` (status ACTIVE), emit `match_found` to both with peer profile + mutual interests (parsed from JSON `interests` arrays).
+- Ephemeral state (queue, active matches, pending calls, socket registry, presence) goes through the **`StateStore`** abstraction in `src/lib/state/` — in-memory implementation by default, Redis implementation when `REDIS_URL` is set (multi-node). Server broadcasts use the Socket.IO Redis adapter when `REDIS_URL` is set, local otherwise.
+- On `start_matching`: set status MATCHING, scan waiting pool, skip blocked / gender-mismatch, create `Match` (status ACTIVE), emit `match_found` to both with peer profile + mutual interests (parsed from JSON `interests` arrays). A periodic **queue sweeper** rescans waiting entries (gender rolls that fail at join time get re-evaluated after a grace period) so mixed-gender pairs cannot dead-lock in the queue.
 - WebRTC: relay `webrtc_offer/answer/candidate` to the peer in the match.
 - In-match chat: persist `Message`, emit `match_message` to peer + `match_message_sent` to sender.
 - `skip_match`/`end_match`: update Match (status/duration, increment `totalConversations` on END), notify peer.
 - Presence: join `user_{id}` room; broadcast `presence_changed` to friends on online/offline; multi-tab `userConnections` map; `heartbeat` (90s timeout) keeps `lastSeen` fresh.
 
 ## DB notes
-- Provider: SQLite. Relations use `onDelete: Cascade` (deleting a user cascades most child rows).
+- Provider: SQLite by default (`prisma/dev.db`). Postgres: `./scripts/use-db.sh postgres`, bootstrap empty DBs with `prisma/postgres-baseline.sql`, or move data with `scripts/copy-sqlite-to-pg.py`; regenerate `postgres-baseline.sql` whenever the schema changes while the provider is postgres (see the script header). Relations use `onDelete: Cascade` (deleting a user cascades most child rows).
 - `languages`/`interests` stored as JSON strings — parse before use.
 - Enums are plain `String` columns (e.g., gender MALE/FEMALE/NON_BINARY/PREFER_NOT_TO_SAY; report categories NUDITY/HARASSMENT/.../OTHER; match status PENDING/ACTIVE/ENDED/SKIPPED).
 

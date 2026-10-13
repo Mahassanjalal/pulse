@@ -8,6 +8,7 @@ import { unlockAchievement, type AchievementKey } from '../lib/achievements';
 import { SendMessageSchema } from '../lib/validators';
 import { hit } from '../lib/limits';
 import { setRealtimeHooks } from '../lib/realtime';
+import { getStore, type RealtimeStateStore, type QueueEntry } from '../lib/state';
 
 // Active Socket.IO server reference, set in setupSocketHandlers. Used by the
 // kickUser realtime hook (account locks, moderation).
@@ -26,19 +27,19 @@ interface SocketAuth extends Socket {
   isLocked?: boolean;
 }
 
-const waitingUsers = new Map<string, { socketId: string; filters?: any }>();
-// Users already claimed by an in-flight match handshake. Used to prevent two
-// concurrent start_matching handlers from pairing the same waiting user into
-// two different matches (a race that left one peer without a connection).
-const claimedUsers = new Set<string>();
-const activeMatches = new Map<string, { user1: string; user2: string; matchId: string; startTime: number }>();
-const pendingCalls = new Map<string, { callerId: string; calleeId: string }>();
+// Phase 1: queue/claims/matches/pending-calls/socket-registry/presence all
+// live behind RealtimeStateStore (Redis when REDIS_URL is set, memory
+// otherwise) so multiple API nodes share one realtime view. Only NODE-LOCAL
+// things remain as Maps here:
+//  - pending call ring timers (owned by the node that created the call)
+//  - heartbeat timers (owned by the node that owns the socket)
 const pendingCallTimers = new Map<string, NodeJS.Timeout>();
-
-// Multi-tab connection tracking: userId -> Set<socketId>
-const userConnections = new Map<string, Set<string>>();
-// Heartbeat timers: socketId -> timeout handle
 const heartbeatTimers = new Map<string, NodeJS.Timeout>();
+
+/** Shortcut to the active state store. */
+function store(): RealtimeStateStore {
+  return getStore();
+}
 
 const HEARTBEAT_TIMEOUT = 90000; // 90s without heartbeat -> disconnect
 
@@ -64,9 +65,10 @@ async function teardownMatch(
   matchId: string,
   reason: 'ended' | 'skipped' | 'moderation',
 ): Promise<void> {
-  const match = activeMatches.get(matchId);
+  // Atomic take from the shared store — two nodes racing teardown (e.g. both
+  // peers ending at once) can't both process it.
+  const match = await store().deleteMatch(matchId);
   if (!match) return;
-  activeMatches.delete(matchId);
 
   const duration = Math.floor((Date.now() - match.startTime) / 1000);
   try {
@@ -86,11 +88,150 @@ async function teardownMatch(
   io.to(`user_${match.user2}`).emit(reason === 'skipped' ? 'match_skipped' : 'match_ended', { matchId, reason });
 }
 
-function isUserInMatch(userId: string): boolean {
-  for (const m of activeMatches.values()) {
-    if (m.user1 === userId || m.user2 === userId) return true;
+async function isUserInMatch(userId: string): Promise<boolean> {
+  // O(1) set membership in Redis (was a full scan of every active match).
+  return store().isUserInMatch(userId);
+}
+
+// Gender-bias grace: pairing only ever consulted the JOINING user's random
+// gender roll, and nobody ever rescanned the queue — so two users of
+// different genders could wait forever when both rolls pointed at their own
+// gender (E2E-verified deadlock: ~25-44% of mixed-gender sessions). After a
+// candidate has waited GENDER_RELAX_MS the preference is dropped, and a
+// sweeper re-scans stale queue entries so stuck users always pair eventually
+// (the "widen the pool after a wait threshold" behaviour from the plan).
+const GENDER_RELAX_MS = Number(process.env.MATCH_GENDER_RELAX_MS || 10_000);
+const QUEUE_SWEEP_INTERVAL_MS = Number(process.env.MATCH_QUEUE_SWEEP_MS || 5_000);
+const QUEUE_SWEEP_MIN_AGE_MS = 5_000;
+
+type PairOutcome = 'paired' | 'skip' | 'fail';
+
+/**
+ * Try to pair `me` with one specific waiting candidate. Shared by the
+ * start_matching scan and the queue sweeper so both follow identical rules
+ * (atomic claim, blocklist, gender grace, peer fetch, match creation,
+ * match_found emits to BOTH nodes via the adapter).
+ */
+async function tryPairWith(
+  io: Server,
+  me: { userId: string; socketId: string; targetGender: string | null; filters?: any },
+  candidateId: string,
+  candidate: QueueEntry,
+): Promise<PairOutcome> {
+  if (candidateId === me.userId) return 'skip';
+
+  // Re-check after listQueue: the candidate may have cancelled/disconnected
+  // since the snapshot was taken (claims alone would pair a gone user).
+  const fresh = await store().getQueueEntry(candidateId);
+  if (!fresh) return 'skip';
+
+  // Atomic both-or-nothing claim (Lua in Redis): no two scanners can pair
+  // the same candidate.
+  if (!(await store().claimUsers(candidateId, me.userId))) return 'skip';
+
+  try {
+    if (await isBlocked(me.userId, candidateId)) return 'skip';
+
+    if (me.targetGender) {
+      // Grace: ignore the preference once the candidate has waited long
+      // enough — a slightly less-biased match beats an infinite queue.
+      const waited = Date.now() - (candidate.joinedAt ?? Date.now());
+      if (waited < GENDER_RELAX_MS) {
+        const peerUser = await prisma.user.findUnique({
+          where: { id: candidateId },
+          select: { gender: true },
+        });
+        if (peerUser && peerUser.gender !== me.targetGender) return 'skip';
+      }
+    }
+
+    await store().leaveQueue(candidateId);
+    await store().leaveQueue(me.userId);
+
+    const [peer1, peer2] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: candidateId },
+        select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, status: true, isVerified: true, isPremium: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: me.userId },
+        select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, status: true, isVerified: true, isPremium: true },
+      }),
+    ]);
+
+    if (!peer1 || !peer2) {
+      // Put BOTH users back — the old code silently dropped the candidate.
+      await store().joinQueue(candidateId, candidate);
+      await store().joinQueue(me.userId, {
+        socketId: me.socketId,
+        filters: me.filters,
+        joinedAt: Date.now(),
+      });
+      return 'fail';
+    }
+
+    const peer1Interests: string[] = JSON.parse(peer1.interests || '[]');
+    const peer2Interests: string[] = JSON.parse(peer2.interests || '[]');
+    const mutual = peer1Interests.filter((i: string) => peer2Interests.includes(i));
+
+    const match = await prisma.match.create({
+      data: {
+        user1Id: candidateId,
+        user2Id: me.userId,
+        status: 'ACTIVE',
+        mutualInterests: JSON.stringify(mutual),
+      },
+    });
+
+    // Handshake window over — release the claims (never released after a
+    // match in the original code, which permanently broke matching after one
+    // completed/skipped match).
+    await store().releaseUsers(candidateId, me.userId);
+    await store().addMatch({ user1: candidateId, user2: me.userId, matchId: match.id, startTime: Date.now() });
+
+    io.to(candidate.socketId).emit('match_found', {
+      matchId: match.id,
+      isInitiator: match.user1Id === candidateId,
+      peer: {
+        id: peer2.id,
+        displayName: peer2.displayName,
+        profilePicture: peer2.profilePicture,
+        age: peer2.age,
+        country: peer2.country,
+        interests: peer2Interests,
+        gender: peer2.gender,
+        status: peer2.status,
+        isVerified: peer2.isVerified,
+        isPremium: peer2.isPremium,
+      },
+    });
+    io.to(me.socketId).emit('match_found', {
+      matchId: match.id,
+      isInitiator: match.user1Id === me.userId,
+      peer: {
+        id: peer1.id,
+        displayName: peer1.displayName,
+        profilePicture: peer1.profilePicture,
+        age: peer1.age,
+        country: peer1.country,
+        interests: peer1Interests,
+        gender: peer1.gender,
+        status: peer1.status,
+        isVerified: peer1.isVerified,
+        isPremium: peer1.isPremium,
+      },
+    });
+
+    return 'paired';
+  } catch (err) {
+    console.error('pairing error:', err);
+    return 'fail';
+  } finally {
+    // Release claims only when still held (paired/fail paths already
+    // released/kept them appropriately — release is idempotent either way,
+    // but a 'skip' must release so the candidate stays claimable).
+    await store().releaseUsers(candidateId, me.userId);
   }
-  return false;
 }
 
 function toPeer(user: any, interests: string[]) {
@@ -148,17 +289,19 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
   // (M11) instead of letting them keep matching until a natural reconnect.
   setRealtimeHooks({
     kickUser: (userId: string, reason: string) => {
-      // Purge matchmaking state first so no new match can be created.
-      waitingUsers.delete(userId);
-      claimedUsers.delete(userId);
+      // Async work: failures must not break the caller (lockAccount).
+      void (async () => {
+        // Purge matchmaking state first so no new match can be created.
+        await store().leaveQueue(userId);
+        await store().releaseUsers(userId);
 
-      // Cancel pending direct calls involving the user.
-      for (const [callId, pending] of pendingCalls.entries()) {
-        if (pending.callerId === userId || pending.calleeId === userId) {
+        // Cancel pending direct calls involving the user (either role).
+        for (const callId of await store().pendingCallIdsFor(userId)) {
+          const pending = await store().deletePendingCall(callId);
+          if (!pending) continue;
           const timer = pendingCallTimers.get(callId);
           if (timer) clearTimeout(timer);
           pendingCallTimers.delete(callId);
-          pendingCalls.delete(callId);
           const otherId = pending.callerId === userId ? pending.calleeId : pending.callerId;
           if (pending.callerId === userId) {
             io.to(`user_${otherId}`).emit('call_cancelled', { callId });
@@ -166,24 +309,20 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
             io.to(`user_${otherId}`).emit('call_declined', { callId });
           }
         }
-      }
 
-      // End any active match cleanly so the peer isn't left hanging.
-      for (const [matchId, match] of activeMatches.entries()) {
-        if (match.user1 === userId || match.user2 === userId) {
-          void teardownMatch(io, matchId, 'moderation');
+        // End any active match cleanly so the peer isn't left hanging.
+        for (const [matchId, match] of await store().listMatches()) {
+          if (match.user1 === userId || match.user2 === userId) {
+            await teardownMatch(io, matchId, 'moderation');
+          }
         }
-      }
 
-      // Force-disconnect every socket for the user.
-      const conns = userConnections.get(userId);
-      if (conns) {
-        for (const socketId of conns) {
-          const s = io.sockets.sockets.get(socketId);
-          s?.disconnect(true);
-        }
-        userConnections.delete(userId);
-      }
+        // Force-disconnect every socket for the user ACROSS NODES — with the
+        // Redis adapter `io.in(room).disconnectSockets()` reaches sockets on
+        // other nodes too (the old code could only see local sockets).
+        // Each socket's own disconnect handler then runs its local cleanup.
+        await io.in(`user_${userId}`).disconnectSockets(true);
+      })().catch((err) => console.error('kickUser failed:', err));
     },
   });
 
@@ -234,7 +373,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     const authSocket = socket as SocketAuth;
     const userId = authSocket.userId!;
 
@@ -243,21 +382,18 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // Join user's personal room
     socket.join(`user_${userId}`);
 
-    // Multi-tab connection tracking
-    if (!userConnections.has(userId)) {
-      userConnections.set(userId, new Set());
-    }
-    const connections = userConnections.get(userId)!;
-    const wasOffline = connections.size === 0;
-    connections.add(socket.id);
+    // Multi-tab connection tracking — shared across nodes so node A losing
+    // its last LOCAL socket no longer marks a user offline while their tab on
+    // node B is still live (audit H11 sibling issue in multi-node setups).
+    const { first: wasOffline } = await store().addSocket(userId, socket.id);
 
     // Start heartbeat timer
     resetHeartbeat(socket, userId);
 
     // M4: the old heartbeat wrote `lastSeen` to the DB on EVERY beat (every
-    // 30s per user — ~16k writes/s at 500k users). Liveness now lives in
-    // memory and the DB write is throttled to at most once per minute per
-    // socket; the write also no longer races with presence updates.
+    // 30s per user — ~16k writes/s at 500k users). Liveness now goes to the
+    // state store (Redis O(1) set, no DB) and the DB write is throttled to at
+    // most once per minute per socket.
     let lastSeenWriteAt = 0;
 
     // If this is the first connection, mark as ONLINE and broadcast
@@ -265,7 +401,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       prisma.user.update({
         where: { id: userId },
         data: { status: 'ONLINE', lastSeen: new Date() },
-      }).then(() => {
+      }).then(async () => {
+        await store().setPresence(userId, 'ONLINE', Date.now());
         broadcastPresence(io, userId, 'ONLINE', new Date());
       }).catch(err => console.error('Status update error:', err));
     }
@@ -277,6 +414,10 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     socket.on('heartbeat', () => {
       resetHeartbeat(socket, userId);
       const now = Date.now();
+      // Cheap liveness updates land in the state store (Redis) on every beat;
+      // the Postgres write is throttled to >=1/min per socket.
+      void store().touchLastSeen(userId, now);
+      void store().touchConnections(userId);
       if (now - lastSeenWriteAt > 60_000) {
         lastSeenWriteAt = now;
         prisma.user.update({
@@ -292,10 +433,27 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // ======================================
 
     socket.on('presence_sync', async (data: { userIds: string[] }) => {
-      const users = await prisma.user.findMany({
-        where: { id: { in: data.userIds } },
-        select: { id: true, status: true, lastSeen: true },
-      });
+      const ids = Array.isArray(data?.userIds) ? data.userIds.slice(0, 200) : [];
+      if (!ids.length) {
+        socket.emit('presence_sync_result', { users: [] });
+        return;
+      }
+      // State store answers live presence cheaply; fall back to the DB for
+      // ids the store doesn't know (never-seen / expired-but-persisted users).
+      const stored = await store().getPresences(ids);
+      const missing = ids.filter((id) => !stored[id]);
+      const rows = missing.length
+        ? await prisma.user.findMany({
+            where: { id: { in: missing } },
+            select: { id: true, status: true, lastSeen: true },
+          })
+        : [];
+      const users = [
+        ...ids
+          .filter((id) => stored[id])
+          .map((id) => ({ id, status: stored[id]!.status, lastSeen: new Date(stored[id]!.lastSeen) })),
+        ...rows.map((r) => ({ id: r.id, status: r.status, lastSeen: r.lastSeen })),
+      ];
       socket.emit('presence_sync_result', { users });
     });
 
@@ -319,153 +477,62 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       const userGender = authSocket.gender;
       const isPremium = authSocket.isPremium;
 
-      waitingUsers.set(userId, {
-        socketId: socket.id,
-        filters: isPremium ? data?.filters : undefined,
-      });
-
       let targetGender: string | null = null;
       if (!isPremium && userGender) {
         const roll = Math.random();
         targetGender = roll < 0.75 ? userGender : (userGender === 'MALE' ? 'FEMALE' : 'MALE');
       }
+      await store().joinQueue(userId, {
+        socketId: socket.id,
+        filters: isPremium ? data?.filters : undefined,
+        joinedAt: Date.now(),
+        targetGender,
+      });
+      await store().setPresence(userId, 'MATCHING', Date.now());
+
+      const me = {
+        userId,
+        socketId: socket.id,
+        targetGender,
+        filters: isPremium ? data?.filters : undefined,
+      };
 
       try {
-      for (const [waitingUserId, waitingData] of waitingUsers) {
-        if (waitingUserId !== userId) {
-          // Reserve both parties synchronously BEFORE any await so a concurrent
-          // start_matching handler can't claim the same waiting user. If either
-          // is already reserved/claimed, skip and keep looking.
-          if (claimedUsers.has(waitingUserId) || claimedUsers.has(userId)) continue;
-          claimedUsers.add(waitingUserId);
-          claimedUsers.add(userId);
-
-          if (await isBlocked(userId, waitingUserId)) {
-            claimedUsers.delete(waitingUserId);
-            claimedUsers.delete(userId);
-            continue;
-          }
-
-          if (targetGender) {
-            const peerUser = await prisma.user.findUnique({
-              where: { id: waitingUserId },
-              select: { gender: true },
-            });
-            if (peerUser && peerUser.gender !== targetGender) {
-              claimedUsers.delete(waitingUserId);
-              claimedUsers.delete(userId);
-              continue;
-            }
-          }
-
-          waitingUsers.delete(waitingUserId);
-          waitingUsers.delete(userId);
-
-          const [peer1, peer2] = await Promise.all([
-            prisma.user.findUnique({
-              where: { id: waitingUserId },
-              select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, status: true, isVerified: true, isPremium: true },
-            }),
-            prisma.user.findUnique({
-              where: { id: userId },
-              select: { id: true, username: true, displayName: true, age: true, country: true, interests: true, profilePicture: true, gender: true, status: true, isVerified: true, isPremium: true },
-            }),
-          ]);
-
-          if (!peer1 || !peer2) {
-            waitingUsers.set(userId, {
-              socketId: socket.id,
-              filters: isPremium ? data?.filters : undefined,
-            });
-            claimedUsers.delete(waitingUserId);
-            claimedUsers.delete(userId);
-            return;
-          }
-
-          const peer1Interests: string[] = JSON.parse(peer1.interests || '[]');
-          const peer2Interests: string[] = JSON.parse(peer2.interests || '[]');
-          const mutual = peer1Interests.filter((i: string) => peer2Interests.includes(i));
-
-          const match = await prisma.match.create({
-            data: {
-              user1Id: waitingUserId,
-              user2Id: userId,
-              status: 'ACTIVE',
-              mutualInterests: JSON.stringify(mutual),
-            },
-          });
-
-          // The handshake window is over — release the claims. Previously
-          // they were NEVER released after a successful match, so after one
-          // completed/skipped match both users stayed in `claimedUsers` and
-          // every future candidate skipped them: matching silently stopped
-          // working until a full reconnect.
-          claimedUsers.delete(waitingUserId);
-          claimedUsers.delete(userId);
-
-          activeMatches.set(match.id, { user1: waitingUserId, user2: userId, matchId: match.id, startTime: Date.now() });
-
-          io.to(waitingData.socketId).emit('match_found', {
-            matchId: match.id,
-            isInitiator: match.user1Id === waitingUserId,
-            peer: {
-              id: peer2.id,
-              displayName: peer2.displayName,
-              profilePicture: peer2.profilePicture,
-              age: peer2.age,
-              country: peer2.country,
-              interests: peer2Interests,
-              gender: peer2.gender,
-              status: peer2.status,
-              isVerified: peer2.isVerified,
-              isPremium: peer2.isPremium,
-            },
-          });
-
-          io.to(socket.id).emit('match_found', {
-            matchId: match.id,
-            isInitiator: match.user1Id === userId,
-            peer: {
-              id: peer1.id,
-              displayName: peer1.displayName,
-              profilePicture: peer1.profilePicture,
-              age: peer1.age,
-              country: peer1.country,
-              interests: peer1Interests,
-              gender: peer1.gender,
-              status: peer1.status,
-              isVerified: peer1.isVerified,
-              isPremium: peer1.isPremium,
-            },
-          });
-
-          return;
+        // Shared queue: candidates come from the state store, so any node can
+        // pair any waiting user. tryPairWith does the atomic claim, blocklist,
+        // gender-grace check and match creation atomically.
+        for (const [waitingUserId, waitingData] of await store().listQueue()) {
+          const outcome = await tryPairWith(io, me, waitingUserId, waitingData);
+          if (outcome === 'paired') return;
+          if (outcome === 'fail') break; // requeued inside; stop this pass
+          // 'skip' -> keep scanning the next candidate
         }
-      }
       } catch (err) {
         // Any mid-handshake failure (e.g. DB error) must not leave stale
-        // claims or drop the user on the floor: release and re-queue.
+        // claims or drop the user on the floor: release and re-queue. Claims
+        // are TTL-capped in Redis, so even a crashed node can't poison users.
         console.error('start_matching error:', err);
-        claimedUsers.delete(userId);
-        waitingUsers.set(userId, { socketId: socket.id, filters: isPremium ? data?.filters : undefined });
+        await store().releaseUsers(userId);
+        await store().joinQueue(userId, { ...me, joinedAt: Date.now() });
         socket.emit('error', { message: 'Matchmaking error. Please try again.' });
         return;
       }
 
-      socket.emit('matching_queue', { queuePosition: waitingUsers.size, status: 'waiting' });
+      socket.emit('matching_queue', { queuePosition: await store().queueSize(), status: 'waiting' });
     });
 
     socket.on('cancel_matching', async () => {
-      waitingUsers.delete(userId);
-      claimedUsers.delete(userId);
+      await store().leaveQueue(userId);
+      await store().releaseUsers(userId);
 
       // H10: don't clobber status when the user is actually inside an active
       // match (multi-tab / raced events used to flip them ONLINE mid-call).
-      if (!isUserInMatch(userId)) {
+      if (!(await isUserInMatch(userId))) {
         await prisma.user.update({
           where: { id: userId },
           data: { status: 'ONLINE' },
         });
+        await store().setPresence(userId, 'ONLINE', Date.now());
       }
 
       socket.emit('matching_cancelled');
@@ -475,8 +542,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // WebRTC SIGNALING
     // ======================================
 
-    socket.on('webrtc_offer', (data: { matchId: string; offer: any }) => {
-      const match = activeMatches.get(data.matchId);
+    socket.on('webrtc_offer', async (data: { matchId: string; offer: any }) => {
+      const match = await store().getMatch(data.matchId);
       if (!match) {
         socket.emit('error', { message: 'Match not found' });
         return;
@@ -489,8 +556,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       });
     });
 
-    socket.on('webrtc_answer', (data: { matchId: string; answer: any }) => {
-      const match = activeMatches.get(data.matchId);
+    socket.on('webrtc_answer', async (data: { matchId: string; answer: any }) => {
+      const match = await store().getMatch(data.matchId);
       if (!match) return;
 
       const otherUserId = getPeerId(match, userId);
@@ -500,8 +567,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       });
     });
 
-    socket.on('webrtc_candidate', (data: { matchId: string; candidate: any }) => {
-      const match = activeMatches.get(data.matchId);
+    socket.on('webrtc_candidate', async (data: { matchId: string; candidate: any }) => {
+      const match = await store().getMatch(data.matchId);
       if (!match) return;
 
       const otherUserId = getPeerId(match, userId);
@@ -530,14 +597,6 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         return;
       }
 
-      // Prevent the caller from starting multiple concurrent calls.
-      for (const pending of pendingCalls.values()) {
-        if (pending.callerId === userId) {
-          socket.emit('call_error', { message: 'You already have an outgoing call' });
-          return;
-        }
-      }
-
       const existingFriend = await prisma.friend.findFirst({
         where: {
           OR: [
@@ -554,47 +613,55 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         socket.emit('call_error', { message: 'Cannot call this user' });
         return;
       }
-      if (isUserInMatch(userId)) {
+      if (await isUserInMatch(userId)) {
         socket.emit('call_error', { message: 'You are already in a call' });
         return;
       }
-      // The callee is busy if they're already in a match OR already have a
-      // pending incoming call from someone else.
-      if (isUserInMatch(friendId)) {
+      // The callee is busy if they're already in a match.
+      if (await isUserInMatch(friendId)) {
         socket.emit('call_error', { message: 'User is busy in another call' });
         return;
       }
-      for (const pending of pendingCalls.values()) {
-        if (pending.calleeId === friendId) {
-          socket.emit('call_error', { message: 'User is busy in another call' });
-          return;
-        }
-      }
-      const calleeConns = userConnections.get(friendId);
-      if (!calleeConns || calleeConns.size === 0) {
+      // Cross-node liveness check (was a node-local Map lookup).
+      if (!(await store().hasSockets(friendId))) {
         socket.emit('call_error', { message: 'User is offline' });
         return;
       }
 
       // Cancel any random-matching queue so the user doesn't get paired while
       // their direct call is ringing.
-      if (waitingUsers.has(userId)) {
-        waitingUsers.delete(userId);
-        claimedUsers.delete(userId);
+      if (await store().getQueueEntry(userId)) {
+        await store().leaveQueue(userId);
+        await store().releaseUsers(userId);
         socket.emit('matching_cancelled');
       }
 
       const callId = uuidv4();
-      pendingCalls.set(callId, { callerId: userId, calleeId: friendId });
+      // Atomic create: the store rejects when EITHER party already has a
+      // pending call — replacing the old O(n) scans over all pending calls.
+      const created = await store().createPendingCall(
+        callId,
+        { callerId: userId, calleeId: friendId },
+        12,
+      );
+      if (!created.created) {
+        socket.emit('call_error', {
+          message: created.busyRole === 'callee' ? 'User is busy in another call' : 'You already have a call in progress',
+        });
+        return;
+      }
 
       // Auto-expire the pending call if neither side acts on it (~12s is a
-      // standard unanswered-call window before the caller is given up).
+      // standard unanswered-call window). The timer lives on the creating
+      // node; the store's TTL is the crash-safety net. deletePendingCall is an
+      // atomic take, so a timeout can't race an accept — only one wins.
       const callTimeout = setTimeout(() => {
-        if (pendingCalls.get(callId)) {
-          pendingCalls.delete(callId);
+        void store().deletePendingCall(callId).then((gone) => {
+          pendingCallTimers.delete(callId);
+          if (!gone) return; // accepted/declined/cancelled already
           socket.emit('call_error', { message: 'Call timed out', code: 'CALL_TIMEOUT' });
           io.to(`user_${friendId}`).emit('call_cancelled', { callId });
-        }
+        });
       }, 12000);
       pendingCallTimers.set(callId, callTimeout);
 
@@ -617,12 +684,18 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     });
 
     socket.on('accept_call', async (data: { callId: string }) => {
-      const pending = data?.callId ? pendingCalls.get(data.callId) : null;
+      const pending = data?.callId ? await store().getPendingCall(data.callId) : null;
       if (!pending || pending.calleeId !== userId) {
         socket.emit('call_error', { message: 'Call is no longer available' });
         return;
       }
-      pendingCalls.delete(data.callId);
+      // Atomic take — if the caller cancelled/timeout fired a millisecond
+      // ago, delete returns null and we bail instead of half-accepting.
+      const taken = await store().deletePendingCall(data.callId);
+      if (!taken) {
+        socket.emit('call_error', { message: 'Call is no longer available' });
+        return;
+      }
       const timer = pendingCallTimers.get(data.callId);
       if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
 
@@ -654,7 +727,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           data: { status: 'ACTIVE' },
         });
       }
-      activeMatches.set(match.id, {
+      await store().addMatch({
         user1: pending.callerId,
         user2: pending.calleeId,
         matchId: match.id,
@@ -685,23 +758,25 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       });
     });
 
-    socket.on('decline_call', (data: { callId: string }) => {
-      const pending = data?.callId ? pendingCalls.get(data.callId) : null;
+    socket.on('decline_call', async (data: { callId: string }) => {
+      const pending = data?.callId ? await store().getPendingCall(data.callId) : null;
       if (!pending) return;
       if (pending.calleeId !== userId && pending.callerId !== userId) return;
-      pendingCalls.delete(data.callId);
+      const taken = await store().deletePendingCall(data.callId);
       const timer = pendingCallTimers.get(data.callId);
       if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
+      if (!taken) return;
       io.to(`user_${pending.callerId}`).emit('call_declined', { callId: data.callId });
     });
 
-    socket.on('cancel_call', (data: { callId: string }) => {
-      const pending = data?.callId ? pendingCalls.get(data.callId) : null;
+    socket.on('cancel_call', async (data: { callId: string }) => {
+      const pending = data?.callId ? await store().getPendingCall(data.callId) : null;
       if (!pending) return;
       if (pending.callerId !== userId) return;
-      pendingCalls.delete(data.callId);
+      const taken = await store().deletePendingCall(data.callId);
       const timer = pendingCallTimers.get(data.callId);
       if (timer) { clearTimeout(timer); pendingCallTimers.delete(data.callId); }
+      if (!taken) return;
       io.to(`user_${pending.calleeId}`).emit('call_cancelled', { callId: data.callId });
     });
 
@@ -710,7 +785,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // hang-up — otherwise the activeMatches entry leaks and the next call fails
     // with "You are already in a call".
     socket.on('end_direct_call', async (data: { matchId: string }) => {
-      const match = activeMatches.get(data.matchId);
+      const match = await store().deleteMatch(data.matchId);
       if (!match) return;
 
       const duration = Math.floor((Date.now() - match.startTime) / 1000);
@@ -721,10 +796,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       });
 
       const otherUserId = getPeerId(match, userId);
-      activeMatches.delete(data.matchId);
-      // Release handshake claims (see start_matching note).
-      claimedUsers.delete(userId);
-      claimedUsers.delete(otherUserId);
+      await store().releaseUsers(userId, otherUserId);
 
       await Promise.all([
         prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
@@ -750,7 +822,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // ======================================
 
     socket.on('send_match_message', async (data: { matchId: string; content: string; type?: string }) => {
-      const match = activeMatches.get(data.matchId);
+      const match = await store().getMatch(data.matchId);
       if (!match) return;
 
       // M1: the socket path previously accepted ANY content/type unvalidated
@@ -801,7 +873,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       let otherUserId: string | undefined;
 
-      const match = activeMatches.get(data.matchId);
+      const match = await store().getMatch(data.matchId);
       if (match) {
         otherUserId = match.user1 === userId ? match.user2 : match.user1;
       } else {
@@ -825,7 +897,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // ======================================
 
     socket.on('skip_match', async (data: { matchId: string }) => {
-      const match = activeMatches.get(data.matchId);
+      const match = await store().deleteMatch(data.matchId);
       if (!match) return;
 
       await prisma.match.update({
@@ -834,22 +906,21 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       });
 
       const otherUserId = getPeerId(match, userId);
-      activeMatches.delete(data.matchId);
+      await store().releaseUsers(userId, otherUserId);
       // H10: skipping used to leave both users' status stuck at MATCHING.
-      // Release handshake claims too (see start_matching note).
-      claimedUsers.delete(userId);
-      claimedUsers.delete(otherUserId);
       await Promise.all([
         prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE' } }).catch(() => {}),
         prisma.user.update({ where: { id: otherUserId }, data: { status: 'ONLINE' } }).catch(() => {}),
       ]);
+      await store().setPresence(userId, 'ONLINE', Date.now());
+      await store().setPresence(otherUserId, 'ONLINE', Date.now());
 
       io.to(`user_${otherUserId}`).emit('match_skipped', { matchId: data.matchId });
       socket.emit('match_ended', { matchId: data.matchId, reason: 'skipped' });
     });
 
     socket.on('end_match', async (data: { matchId: string }) => {
-      const match = activeMatches.get(data.matchId);
+      const match = await store().deleteMatch(data.matchId);
       if (!match) return;
 
       const duration = Math.floor((Date.now() - match.startTime) / 1000);
@@ -860,15 +931,14 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       });
 
       const otherUserId = getPeerId(match, userId);
-      activeMatches.delete(data.matchId);
-      // Release handshake claims (see start_matching note).
-      claimedUsers.delete(userId);
-      claimedUsers.delete(otherUserId);
+      await store().releaseUsers(userId, otherUserId);
 
       await Promise.all([
         prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
         prisma.user.update({ where: { id: otherUserId }, data: { status: 'ONLINE', totalConversations: { increment: 1 } } }),
       ]);
+      await store().setPresence(userId, 'ONLINE', Date.now());
+      await store().setPresence(otherUserId, 'ONLINE', Date.now());
 
       // Unlock conversation-based achievements for both participants.
       const [me, peer] = await Promise.all([
@@ -975,46 +1045,79 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       // Remove from waiting pool — but ONLY if THIS socket is the one that
       // queued the user (H11). Previously any secondary tab closing silently
       // un-queued the still-connected primary tab, which then never matched.
-      const queued = waitingUsers.get(userId);
+      const queued = await store().getQueueEntry(userId);
       if (queued && queued.socketId === socket.id) {
-        waitingUsers.delete(userId);
+        await store().leaveQueue(userId);
       }
-      claimedUsers.delete(userId);
+      await store().releaseUsers(userId);
 
-      // Clean up any pending calls involving this user. Only act on the last
-      // connection to avoid duplicate notifications across multi-tab sessions.
-      const connections = userConnections.get(userId);
-      const isLastConnection = !connections || connections.size <= 1;
+      // Cross-node multi-tab: only go OFFLINE / cancel calls when this was
+      // the user's LAST socket ANYWHERE (the registry lives in the store, so
+      // tabs spread across nodes count correctly).
+      const { last: isLastConnection } = await store().removeSocket(userId, socket.id);
       if (isLastConnection) {
-        for (const [callId, pending] of pendingCalls.entries()) {
-          if (pending.callerId === userId || pending.calleeId === userId) {
-            const timer = pendingCallTimers.get(callId);
-            if (timer) clearTimeout(timer);
-            pendingCallTimers.delete(callId);
-            pendingCalls.delete(callId);
-            const otherId = pending.callerId === userId ? pending.calleeId : pending.callerId;
-            if (pending.callerId === userId) {
-              io.to(`user_${otherId}`).emit('call_cancelled', { callId });
-            } else {
-              io.to(`user_${otherId}`).emit('call_declined', { callId });
-            }
+        for (const callId of await store().pendingCallIdsFor(userId)) {
+          const pending = await store().deletePendingCall(callId);
+          if (!pending) continue;
+          const timer = pendingCallTimers.get(callId);
+          if (timer) clearTimeout(timer);
+          pendingCallTimers.delete(callId);
+          const otherId = pending.callerId === userId ? pending.calleeId : pending.callerId;
+          if (pending.callerId === userId) {
+            io.to(`user_${otherId}`).emit('call_cancelled', { callId });
+          } else {
+            io.to(`user_${otherId}`).emit('call_declined', { callId });
           }
         }
-      }
 
-      // Multi-tab: only go OFFLINE if this was the last connection
-      if (connections) {
-        connections.delete(socket.id);
-        if (connections.size === 0) {
-          userConnections.delete(userId);
-          const now = new Date();
-          await prisma.user.update({
-            where: { id: userId },
-            data: { status: 'OFFLINE', lastSeen: now },
-          });
-          broadcastPresence(io, userId, 'OFFLINE', now);
-        }
+        const now = new Date();
+        await prisma.user.update({
+          where: { id: userId },
+          data: { status: 'OFFLINE', lastSeen: now },
+        }).catch(() => {});
+        await store().setPresence(userId, 'OFFLINE', now.getTime());
+        broadcastPresence(io, userId, 'OFFLINE', now);
       }
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Queue sweeper — rescans stale entries so nobody waits forever.
+  // Fixes the E2E-verified deadlock where only the JOINING user's gender roll
+  // was ever checked and the queue was never rescanned: mixed-gender pairs
+  // (and vanished peers) now pair within ~QUEUE_SWEEP + GENDER_RELAX ms.
+  // ---------------------------------------------------------------------
+  async function sweepQueue(): Promise<void> {
+    try {
+      const entries = await store().listQueue();
+      const now = Date.now();
+      for (const [waitingUserId, waitingData] of entries) {
+        const age = now - (waitingData.joinedAt ?? 0);
+        if (age < QUEUE_SWEEP_MIN_AGE_MS) continue;
+        // Dead entries (clean disconnect removes them; this catches the rest
+        // via the store's socket leases).
+        if (!(await store().hasSockets(waitingUserId))) {
+          await store().leaveQueue(waitingUserId);
+          continue;
+        }
+        const me = {
+          userId: waitingUserId,
+          socketId: waitingData.socketId,
+          targetGender: waitingData.targetGender ?? null,
+          filters: waitingData.filters,
+        };
+        for (const [otherId, otherEntry] of entries) {
+          if (otherId === waitingUserId) continue;
+          if (now - (otherEntry.joinedAt ?? 0) < QUEUE_SWEEP_MIN_AGE_MS) continue;
+          const outcome = await tryPairWith(io, me, otherId, otherEntry);
+          if (outcome === 'paired' || outcome === 'fail') break;
+        }
+      }
+    } catch (err) {
+      console.error('queue sweep error:', err);
+    }
+  }
+
+  const queueSweeper = setInterval(() => void sweepQueue(), QUEUE_SWEEP_INTERVAL_MS);
+  queueSweeper.unref?.();
 }

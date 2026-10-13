@@ -19,6 +19,8 @@ import { handleStripeWebhook } from './routes/premium';
 import { setNotificationIO } from './lib/notifications';
 import requestLogger from './plugins/request-logger';
 import { revokeExpiredPremium } from './routes/premium';
+import { initRealtimeStore, resetRealtimeStore, getStore } from './lib/state';
+import { createAdapterClients } from './lib/redis';
 
 // M17: honor X-Forwarded-For from the platform load balancer so req.ip (used
 // by rate limiters, login history and audit logs) is the real client IP, not
@@ -166,6 +168,27 @@ async function start() {
     maxHttpBufferSize: 100 * 1024,
   });
 
+  // Phase 1/2: shared realtime state + cross-node broadcasts.
+  //  - initRealtimeStore(): Redis-backed queue/matches/calls/presence when
+  //    REDIS_URL is set, in-memory otherwise (single-node dev parity).
+  //  - Redis adapter: io.to()/rooms reach sockets on OTHER nodes, which is
+  //    what makes multi-node presence, match_found and kicks actually work.
+  await initRealtimeStore();
+  let adapterClients: { pub: any; sub: any } | null = null;
+  if (process.env.REDIS_URL) {
+    try {
+      adapterClients = await createAdapterClients(process.env.REDIS_URL);
+      const { createAdapter } = await import('@socket.io/redis-adapter');
+      io.adapter(createAdapter(adapterClients.pub, adapterClients.sub));
+      app.log.info('Socket.IO Redis adapter active (multi-node broadcasts enabled)');
+    } catch (err) {
+      app.log.error({ err }, 'Failed to attach Redis adapter — broadcasts are node-local');
+      adapterClients = null;
+    }
+  } else {
+    app.log.warn('REDIS_URL not set — running single-node (in-memory state, no cross-node broadcasts)');
+  }
+
   app.decorate('io', io);
   setNotificationIO(io);
 
@@ -238,6 +261,11 @@ async function start() {
     app.log.info('Shutting down gracefully...');
     clearInterval(premiumSweep);
     io.close();
+    await resetRealtimeStore().catch(() => {});
+    if (adapterClients) {
+      await adapterClients.pub.quit().catch(() => {});
+      await adapterClients.sub.quit().catch(() => {});
+    }
     await app.close();
     process.exit(0);
   };

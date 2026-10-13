@@ -1,0 +1,72 @@
+# Postgres + Redis for Pulse — staging / production-shaped local runs.
+#
+# Local dev does NOT need this: the committed default is SQLite + in-memory
+# realtime state (npm run dev just works). Bring this up when you want to
+# exercise the multi-node path:
+#
+#   docker compose -f infra/docker-compose.yml up -d --wait
+#   cd backend
+#   DATABASE_URL="postgres://pulse:pulse@localhost:5432/pulse" ./scripts/use-db.sh postgres
+#   DATABASE_URL="postgres://pulse:pulse@localhost:5432/pulse" \
+#   REDIS_URL="redis://localhost:6379" npm run dev
+#
+# Bootstrap an empty Postgres with:
+#   DATABASE_URL=... npx prisma db execute --file prisma/postgres-baseline.sql
+# Migrate an existing SQLite dev DB (schema + data) with:
+#   DATABASE_URL=... ./scripts/copy-sqlite-to-pg.py
+#
+# Optional connection pooler (PgBouncer, transaction mode) for staging/HA:
+#   docker compose -f infra/docker-compose.yml --profile pooler up -d
+#   DATABASE_URL="postgres://pulse:pulse@localhost:6432/pulse" ...
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+      POSTGRES_DB: pulse
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulse -d pulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # PgBouncer in transaction pooling mode — the connection multiplier you put
+  # in front of Postgres once app nodes outnumber Postgres connections.
+  pgbouncer:
+    profiles: ["pooler"]
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: postgres
+      DB_USER: pulse
+      DB_PASSWORD: pulse
+      DB_NAME: pulse
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "25"
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

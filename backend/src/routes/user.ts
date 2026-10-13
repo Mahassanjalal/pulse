@@ -5,6 +5,7 @@ import { getFriendIds } from '../lib/relations';
 import { UpdateProfileSchema, UpdatePreferencesSchema, UpdatePrivacySettingsSchema } from '../lib/validators';
 import { authenticate, getAuthUser } from '../middleware/auth';
 import { adjustCoins, ApiError } from '../lib/coins';
+import { getStore } from '../lib/state';
 
 export default async function userRoutes(app: FastifyInstance) {
   app.get('/:id', async (req, reply) => {
@@ -221,7 +222,14 @@ export default async function userRoutes(app: FastifyInstance) {
           profilePicture: true,
         },
       }),
-      prisma.user.count({ where: { status: 'ONLINE' } }),
+      (async () => {
+        // Phase 1: with Redis the online count is an O(1) SCARD over live
+        // presence (no full-table count per dashboard load); the memory store
+        // returns null and we keep the pre-Phase-1 DB count.
+        const fromStore = await getStore().onlineCount();
+        if (fromStore !== null) return fromStore;
+        return prisma.user.count({ where: { status: 'ONLINE' } });
+      })(),
       prisma.user.findMany({
         where: {
           id: { not: authUser.id },
