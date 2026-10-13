@@ -2,7 +2,7 @@
 
 > Full-system review of the Pulse codebase (Fastify + Prisma/SQLite + Socket.IO backend, Angular 16 frontend) against a target of **500,000 concurrent users**, benchmarked against Azar, HOLLA, OmeTV, Chatrandom, Emerald Chat, Chatroulette, Monkey, LivU and Paltalk (2025–26 product research).
 >
-> Date: 2026-10-12 (Phase 0) / 2026-10-13 (Phase 1) · Status: **Phase 0 (security) + Phase 1 (data layer: Postgres + Redis) IMPLEMENTED** (see implementation logs below).
+> Date: 2026-10-12 (Phase 0) / 2026-10-13 (Phases 1–3) · Status: **Phase 0 (security) + Phase 1 (data layer: Postgres + Redis) + Phase 2 (horizontal realtime) + Phase 3 (matching engine rewrite) IMPLEMENTED** (see implementation logs below).
 
 ## Implementation log (2026-10-12, this session)
 
@@ -78,10 +78,33 @@
 - **Socket E2E on that stack**: two real clients matched, skipped, re-matched (`scripts/e2e-match.mjs` → PASS).
 - **Cross-node**: two separate server processes sharing only Redis pair users across nodes and deliver `match_found` cross-node (`scripts/e2e-cross-node.mjs` → PASS); store conformance suite runs against memory **and** real Redis (same tests, both green).
 
+## Implementation log (2026-10-13, Phases 2+3 — realtime scale + matching engine)
+
+**Reconnect storms and the matching engine are now production-shaped: native ping/pong liveness, jittered client reconnect with queue re-entry + active-match replay, a Redis sorted-set priority queue with atomic claims, premium lanes, fairness widening, and abuse rate limits — all measured live (load harness + E2E + cross-node).**
+
+### Shipped — Phase 2 (horizontal realtime)
+- **Native Socket.IO ping/pong liveness** (`server.ts`: explicit `pingInterval`/`pingTimeout`, `pingTimeout` floor) replaces the custom 90s heartbeat timeout; the app-level `heartbeat` event now only refreshes freshness data (≤1 DB write/min/socket; liveness goes to Redis).
+- **Reconnect-storm hardening (client)**: `SocketService` uses production reconnect settings (jittered backoff `randomizationFactor 0.5`, cap 30s, infinite attempts) and refreshes expired tokens over HTTP on `connect_error`; `MatchingService` re-emits `start_matching` on reconnect — the server answers with either a **queue re-entry** (`matching_queue`) or an **active-match replay** (`match_found` + `replay: true`) so a reconnecting user can never be double-matched or left with a stale "searching" state.
+- **Event-drop race fixed (found by the storm test)**: the async Socket.IO `connection` handler awaited `store().addSocket(...)` BEFORE registering listeners, so client events arriving in that window (e.g. an immediate `start_matching` after reconnect) were **silently dropped** — observed as 0/400 answered under storm load. Socket registration now runs in the background (all listeners bind synchronously), with `disconnect` awaiting insertion so removal can never race ahead of it.
+- **Silent handler-death fixed**: `start_matching` had uncaught `prisma.user.update` calls outside its try/catch — under SQLite write contention (P1008) the handler died without responding, leaving "searching" UIs stale. The whole handler now has a top-level guard that always answers the client.
+
+### Shipped — Phase 3 (matching engine)
+- **Sorted-set priority queue**: the waiting queue moved from an unordered hash scan to a **Redis sorted set scored by join time with a premium head start** (both stores implement it; memory store models data/ranking separately to match Redis semantics exactly). Scanners walk the fairest candidate first; FIFO fairness means nobody can be starved by arbitrary hash order.
+- **Atomic claim-dequeue**: `claimWaitingUser` is a Lua script in Redis (and an atomic op in memory) — two nodes can never claim the same waiting user; claims carry **TTL leases** so a crashed node can't poison the queue.
+- **Premium lanes**: premium users get a bounded score head start (not unbounded priority), so free users still flow.
+- **Fairness/starvation widening**: `tryPairWith` and the periodic queue **sweeper** share one rule set — after a wait threshold, preferences widen (incl. gender-grace) so mixed-preference pairs that could never pair instantly still pair eventually (this also killed the pre-existing mixed-gender deadlock).
+- **Per-join scan cap**: each joiner inspects at most 25 candidates (O(1) per join instead of O(queue)); the sweeper covers the remainder — this bounds reconnect-storm re-join cost.
+- **Abuse rate limits (3c)**: matchmaking/requeue budget 20/min per user (generous enough for honest reconnects, stops hot-loop churn); rapid-skip signal tracking on the store for future trust-score weighting.
+
+### Measured (live, this session — `scripts/load-sockets.mjs`)
+- **connect** — 2,000 sockets / 200 users (multi-tab): **2000/2000 connected, 0 errors**, 77 conn/s in waves, connect p50=183ms p95=4.8s (wave-gated), heartbeat RTT p50=7ms p95=10ms, **44.6KB server RAM/conn**, fd limits verified 65535.
+- **storm** — 400 sockets, two full drop-everything cycles with requeue: recovery 400/400 both storms (p50≈5–10s with production jittered backoff), **searchers answered 200/200 after storm1** (queue re-entry + fresh pairs), **all answered 400/400 after storm2** (active-match replays + fresh pairs for the still-queued). Before the two fixes above: 56/200 then 0/400 — the harness caught two real server bugs.
+- **match** — 50 pairs simultaneous: **100/100 matched**, `match_found` p50=4.3s p95=6.8s; 200 pairs: 400/400 matched, p50=14.3s (SQLite serializes each match's writes; Postgres removes this bottleneck — see Phase 1 log).
+- Store conformance suite (41 tests incl. claim-dequeue ordering, premium score ordering, lease TTL) runs against memory **and** real Redis — both green; `e2e-match.mjs` and `e2e-cross-node.mjs` re-verified on the fixed build.
+
 ### Still open (needs infra / next phases)
-- **Phase 2+**: load-test socket density per node, native ping/pong heartbeat, reconnect-storm drills.
-- **Phase 3**: replace the FIFO queue scan with Redis sorted-set queues (atomic `ZPOPMIN` dequeue, TTL leases, premium lanes) — the store seam is in place.
-- H1/H2 remainder: uploads still local disk (M8 → R2/S3), message ids still UUIDs (keyset cursor works; ULID is the cleaner fix).
+- **Phase 4**: media tier — coturn fleet + per-node TURN credential minting already exists; SFU decision (LiveKit/mediasoup) + simulcast; instrument relay %/ICE failure rate.
+- **Phase 5/6**: on-device blur-before-accept, sampled-frame moderation, SLO dashboards, chaos drills (node kill during matches is partially covered by the cross-node tests).
 - M5 `/discover` & dashboard trending still sort the whole user table (now indexed; revisit with proper feeds).
 - M7 `withRealCounts` per profile view (needs cached counters).
 - M10 admin role-value validation.

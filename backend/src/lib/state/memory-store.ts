@@ -5,6 +5,7 @@ import type {
   QueueEntry,
   RealtimeStateStore,
 } from './types';
+import { queueScore } from './score';
 
 /**
  * In-memory realtime state — the exact semantics the backend had before
@@ -14,10 +15,14 @@ import type {
 export class MemoryRealtimeState implements RealtimeStateStore {
   readonly kind = 'memory' as const;
 
-  private queue = new Map<string, QueueEntry>();
+  // Phase 3 models the Redis layout: DATA (hash) and RANKING (zset) are
+  // separate — a claimed/in-flight candidate is removed from the ranking
+  // (hidden from scanners) but their entry data survives for requeue.
+  private queueData = new Map<string, QueueEntry>();
+  private queueRanked = new Set<string>();
   private claims = new Set<string>();
   private matches = new Map<string, MatchEntry>();
-  private matchedUsers = new Set<string>();
+  private userToMatch = new Map<string, string>();
   private pendingCalls = new Map<string, PendingCall>();
   private callsByUser = new Map<string, Set<string>>();
   private connections = new Map<string, Set<string>>();
@@ -25,19 +30,44 @@ export class MemoryRealtimeState implements RealtimeStateStore {
 
   // ---- queue ----
   async joinQueue(userId: string, entry: QueueEntry): Promise<void> {
-    this.queue.set(userId, entry);
+    this.queueData.set(userId, entry);
+    this.queueRanked.add(userId);
   }
   async leaveQueue(userId: string): Promise<void> {
-    this.queue.delete(userId);
+    this.queueData.delete(userId);
+    this.queueRanked.delete(userId);
   }
   async getQueueEntry(userId: string): Promise<QueueEntry | null> {
-    return this.queue.get(userId) ?? null;
+    return this.queueData.get(userId) ?? null;
   }
   async listQueue(): Promise<Array<[string, QueueEntry]>> {
-    return [...this.queue.entries()];
+    // Priority order: score asc, userId asc as a deterministic tiebreak so
+    // both stores return byte-identical ordering for the conformance suite.
+    const ranked: Array<[string, QueueEntry]> = [];
+    for (const id of this.queueRanked) {
+      const entry = this.queueData.get(id);
+      if (entry) ranked.push([id, entry]);
+    }
+    return ranked.sort((a, b) => {
+      const d = queueScore(a[1]) - queueScore(b[1]);
+      return d !== 0 ? d : a[0].localeCompare(b[0]);
+    });
   }
   async queueSize(): Promise<number> {
-    return this.queue.size;
+    return this.queueRanked.size;
+  }
+
+  async claimCandidate(userId: string): Promise<QueueEntry | null> {
+    const entry = this.queueData.get(userId);
+    if (!entry || !this.queueRanked.has(userId) || this.claims.has(userId)) return null;
+    this.queueRanked.delete(userId); // hidden from scanners; data survives
+    this.claims.add(userId);
+    return entry;
+  }
+  async requeueCandidate(userId: string, entry: QueueEntry): Promise<void> {
+    this.queueData.set(userId, entry);
+    this.queueRanked.add(userId);
+    this.claims.delete(userId);
   }
 
   // ---- claims ----
@@ -55,8 +85,8 @@ export class MemoryRealtimeState implements RealtimeStateStore {
   // ---- matches ----
   async addMatch(match: MatchEntry): Promise<void> {
     this.matches.set(match.matchId, match);
-    this.matchedUsers.add(match.user1);
-    this.matchedUsers.add(match.user2);
+    this.userToMatch.set(match.user1, match.matchId);
+    this.userToMatch.set(match.user2, match.matchId);
   }
   async getMatch(matchId: string): Promise<MatchEntry | null> {
     return this.matches.get(matchId) ?? null;
@@ -65,12 +95,16 @@ export class MemoryRealtimeState implements RealtimeStateStore {
     const match = this.matches.get(matchId);
     if (!match) return null;
     this.matches.delete(matchId);
-    this.matchedUsers.delete(match.user1);
-    this.matchedUsers.delete(match.user2);
+    if (this.userToMatch.get(match.user1) === matchId) this.userToMatch.delete(match.user1);
+    if (this.userToMatch.get(match.user2) === matchId) this.userToMatch.delete(match.user2);
     return match;
   }
   async isUserInMatch(userId: string): Promise<boolean> {
-    return this.matchedUsers.has(userId);
+    return this.userToMatch.has(userId);
+  }
+  async getMatchForUser(userId: string): Promise<MatchEntry | null> {
+    const matchId = this.userToMatch.get(userId);
+    return matchId ? this.matches.get(matchId) ?? null : null;
   }
   async listMatches(): Promise<Array<[string, MatchEntry]>> {
     return [...this.matches.entries()];
@@ -177,10 +211,11 @@ export class MemoryRealtimeState implements RealtimeStateStore {
   }
 
   async close(): Promise<void> {
-    this.queue.clear();
+    this.queueData.clear();
+    this.queueRanked.clear();
     this.claims.clear();
     this.matches.clear();
-    this.matchedUsers.clear();
+    this.userToMatch.clear();
     this.pendingCalls.clear();
     this.callsByUser.clear();
     this.connections.clear();

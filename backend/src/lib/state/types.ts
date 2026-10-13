@@ -19,6 +19,12 @@ export interface QueueEntry {
   joinedAt?: number;
   /** The gender roll computed at join time (used by the queue sweeper). */
   targetGender?: string | null;
+  /**
+   * Phase 3: premium users get a bounded head start in the priority order
+   * (score = joinedAt - premium offset), matching the "premium priority
+   * lanes" plan item without starving free users beyond the offset window.
+   */
+  premium?: boolean;
 }
 
 export interface MatchEntry {
@@ -42,11 +48,31 @@ export interface RealtimeStateStore {
   readonly kind: 'memory' | 'redis';
 
   // ---------- matchmaking queue ----------
+  //
+  // Phase 3: the queue is ORDERED by priority score
+  //   score = (joinedAt ?? now) - (premium ? PREMIUM_PRIORITY_MS : 0)
+  // so listQueue() returns lowest score first — FIFO fairness for everyone,
+  // with premium users jumping the line by at most PREMIUM_PRIORITY_MS.
+  // Scanners walk the list in order, which prevents the old starvation
+  // pattern where a waiting user could be passed over indefinitely.
   joinQueue(userId: string, entry: QueueEntry): Promise<void>;
   leaveQueue(userId: string): Promise<void>;
   getQueueEntry(userId: string): Promise<QueueEntry | null>;
+  /** Priority order (best score first). */
   listQueue(): Promise<Array<[string, QueueEntry]>>;
   queueSize(): Promise<number>;
+
+  /**
+   * Phase 3 atomic dequeue: as ONE step, verify the user is unclaimed and
+   * queued, REMOVE them from the ordered queue (hidden from other scanners)
+   * and set their handshake claim. Returns the entry, or null when the user
+   * is already claimed / not queued / gone. This replaces the old
+   * list -> getQueueEntry -> claimUsers sequence whose non-atomic window let
+   * disconnects and parallel scanners interleave.
+   */
+  claimCandidate(userId: string): Promise<QueueEntry | null>;
+  /** Put a scanned-but-ineligible candidate back with their ORIGINAL score. */
+  requeueCandidate(userId: string, entry: QueueEntry): Promise<void>;
 
   /**
    * Atomically claim users for a match handshake (both-or-nothing).
@@ -63,6 +89,13 @@ export interface RealtimeStateStore {
   deleteMatch(matchId: string): Promise<MatchEntry | null>;
   /** O(1) — was a full scan of every active match before. */
   isUserInMatch(userId: string): Promise<boolean>;
+  /**
+   * O(1) user -> active match lookup. Used by the Phase-2 reconnect replay:
+   * when a client that was mid-match reconnects (and may have missed
+   * `match_found`), the server re-emits the live match instead of letting
+   * them re-queue into a second one.
+   */
+  getMatchForUser(userId: string): Promise<MatchEntry | null>;
   listMatches(): Promise<Array<[string, MatchEntry]>>;
 
   // ---------- pending direct calls ----------

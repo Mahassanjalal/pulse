@@ -71,9 +71,16 @@ export class SocketService implements OnDestroy {
       // realtime silently died until a full page reload).
       auth: { token, userId, refreshToken: localStorage.getItem('refreshToken') || undefined },
       transports: ['websocket'],
+      // Phase 2 (reconnect storms): exponential-ish backoff with jitter and
+      // NO attempt cap. The old settings gave up after 10 fast attempts
+      // (~10s of downtime) — realtime then stayed dead until a full page
+      // reload. Jitter (randomizationFactor) spreads a fleet's reconnects so
+      // a server restart doesn't produce a thundering herd.
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 10,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5,
+      reconnectionAttempts: Infinity,
     });
 
     this.socket.on('connect', () => {
@@ -150,6 +157,9 @@ export class SocketService implements OnDestroy {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
+    // NOTE (Phase 2): connection liveness is Socket.IO's NATIVE ping/pong
+    // (driven by the server every ~25s) — this app-level heartbeat only
+    // refreshes lastSeen/presence data. It does not keep the socket alive.
     this.heartbeatInterval = setInterval(() => {
       this.emit('heartbeat');
     }, 30000);

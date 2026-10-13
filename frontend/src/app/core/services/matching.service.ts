@@ -26,6 +26,10 @@ export class MatchingService {
   private status = 'idle';
   private timer = 0;
   private currentMatchId: string | null = null;
+  // Phase 2: remembered so a reconnect can re-enter the queue with the same
+  // filters the user chose (the server drops queue entries on disconnect).
+  private lastFilters: any = null;
+  private hadDisconnect = false;
 
   // BehaviorSubject (seeded with null) so a freshly-mounted /video page that
   // subscribes AFTER match_found already fired still receives the live match.
@@ -42,6 +46,25 @@ export class MatchingService {
     private http: HttpClient,
     private socketService: SocketService
   ) {
+    // Phase 2 reconnect correctness: when the socket drops, the server
+    // removes us from the matchmaking queue (our disconnect owns the entry).
+    // On reconnect, if the user was still SEARCHING, re-enter the queue —
+    // otherwise the UI shows "searching" forever while we're not queued.
+    // (Users who were mid-MATCH are handled server-side: start_matching
+    // replays their active match instead of re-queuing.)
+    this.socketService.getConnectionState().subscribe((state) => {
+      if (state === 'disconnected') {
+        this.hadDisconnect = true;
+        return;
+      }
+      if (state === 'connected' && this.hadDisconnect) {
+        this.hadDisconnect = false;
+        if (this.status === 'matching') {
+          this.startMatching(this.lastFilters);
+        }
+      }
+    });
+
     this.socketService.on('match_found').subscribe((data: any) => {
       this.status = 'matched';
       this.statusChange$.next('matched');
@@ -127,6 +150,7 @@ export class MatchingService {
 
   startMatching(filters?: any): void {
     this.status = 'matching';
+    this.lastFilters = filters ?? this.lastFilters;
     this.statusChange$.next('matching');
     this.socketService.startMatching(filters);
   }

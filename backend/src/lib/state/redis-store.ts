@@ -1,4 +1,5 @@
 import type { RedisClient } from '../redis';
+import { queueScore } from './score';
 import type {
   MatchEntry,
   PendingCall,
@@ -11,10 +12,12 @@ import type {
  * Shared Redis-backed realtime state (AUDIT-AND-PLAN Phase 1).
  *
  * Key design (all keys prefixed by purpose; TTLs make crashed nodes self-heal):
- *   q:wait                 HASH  userId -> JSON(QueueEntry)     (matchmaking queue)
+ *   q:wait                 HASH  userId -> JSON(QueueEntry)     (matchmaking queue data)
+ *   q:rank                 ZSET  userId score=queueScore        (Phase 3 priority order:
+ *                              premium head start + FIFO; ZPOPMIN-style atomic dequeue)
  *   q:claim:{userId}       STRING "1" EX 60                     (handshake claim, TTL-capped)
  *   m:active               HASH  matchId -> JSON(MatchEntry)    (active matches)
- *   m:users                SET   userIds currently in a match   (O(1) in-call checks)
+ *   m:byuser               HASH  userId -> matchId              (O(1) in-call + reconnect replay)
  *   call:{callId}          STRING JSON(PendingCall) EX ttl      (pending direct call)
  *   call:for:{userId}      SET   callIds EX ttl                 (busy checks, both roles)
  *   conn:{userId}          SET   socketIds EX 180               (cross-node multi-tab)
@@ -45,21 +48,68 @@ export class RedisRealtimeState implements RealtimeStateStore {
 
   // ------------------------------------------------------------------ queue
   async joinQueue(userId: string, entry: QueueEntry): Promise<void> {
-    await this.redis.hSet('q:wait', userId, JSON.stringify(entry));
+    const pipe = this.redis.multi();
+    pipe.hSet('q:wait', userId, JSON.stringify(entry));
+    pipe.zAdd('q:rank', [{ score: queueScore(entry), value: userId }]);
+    await pipe.exec();
   }
   async leaveQueue(userId: string): Promise<void> {
-    await this.redis.hDel('q:wait', userId);
+    const pipe = this.redis.multi();
+    pipe.hDel('q:wait', userId);
+    pipe.zRem('q:rank', [userId]);
+    await pipe.exec();
   }
   async getQueueEntry(userId: string): Promise<QueueEntry | null> {
     const raw = await this.redis.hGet('q:wait', userId);
     return raw ? (JSON.parse(raw) as QueueEntry) : null;
   }
   async listQueue(): Promise<Array<[string, QueueEntry]>> {
-    const all = await this.redis.hGetAll('q:wait');
-    return Object.entries(all).map(([userId, raw]) => [userId, JSON.parse(raw) as QueueEntry]);
+    const ids = (await this.redis.zRange('q:rank', 0, -1)) as string[];
+    if (!ids.length) return [];
+    const pipe = this.redis.multi();
+    for (const id of ids) pipe.hGet('q:wait', id);
+    const raws = (await pipe.exec()) as unknown as Array<string | null>;
+    const out: Array<[string, QueueEntry]> = [];
+    const orphans: string[] = [];
+    ids.forEach((id, i) => {
+      const raw = raws[i];
+      if (raw) out.push([id, JSON.parse(raw) as QueueEntry]);
+      else orphans.push(id); // score without data — self-heal
+    });
+    if (orphans.length) await this.redis.zRem('q:rank', orphans);
+    return out;
   }
   async queueSize(): Promise<number> {
-    return this.redis.hLen('q:wait');
+    // ZCARD = what scanners actually see (mirrors listQueue; a claimed/
+    // in-flight candidate is dequeued but still has hash data).
+    return this.redis.zCard('q:rank');
+  }
+
+  /**
+   * Phase 3 atomic dequeue (Lua): claim check + hash read + ZREM + claim SET
+   * happen as one indivisible step, so two scanners on two nodes can never
+   * dequeue the same waiting user (the plan's "atomic dequeue so two workers
+   * can never claim the same user").
+   */
+  async claimCandidate(userId: string): Promise<QueueEntry | null> {
+    const script = `
+      local uid = ARGV[1]
+      if redis.call('EXISTS', 'q:claim:' .. uid) == 1 then return nil end
+      local data = redis.call('HGET', 'q:wait', uid)
+      if not data then return nil end
+      if redis.call('ZREM', 'q:rank', uid) == 0 then return nil end
+      redis.call('SET', 'q:claim:' .. uid, '1', 'EX', 60)
+      return data
+    `;
+    const raw = (await this.redis.eval(script, { keys: [], arguments: [userId] })) as string | null;
+    return raw ? (JSON.parse(raw) as QueueEntry) : null;
+  }
+  async requeueCandidate(userId: string, entry: QueueEntry): Promise<void> {
+    const pipe = this.redis.multi();
+    pipe.zAdd('q:rank', [{ score: queueScore(entry), value: userId }]);
+    pipe.hSet('q:wait', userId, JSON.stringify(entry));
+    pipe.del(`q:claim:${userId}`);
+    await pipe.exec();
   }
 
   /**
@@ -93,34 +143,52 @@ export class RedisRealtimeState implements RealtimeStateStore {
 
   // ---------------------------------------------------------------- matches
   async addMatch(match: MatchEntry): Promise<void> {
-    const pipeline = this.redis.multi();
-    pipeline.hSet('m:active', match.matchId, JSON.stringify(match));
-    pipeline.sAdd('m:users', [match.user1, match.user2]);
-    await pipeline.exec();
+    const pipe = this.redis.multi();
+    pipe.hSet('m:active', match.matchId, JSON.stringify(match));
+    pipe.hSet('m:byuser', match.user1, match.matchId);
+    pipe.hSet('m:byuser', match.user2, match.matchId);
+    await pipe.exec();
   }
   async getMatch(matchId: string): Promise<MatchEntry | null> {
     const raw = await this.redis.hGet('m:active', matchId);
     return raw ? (JSON.parse(raw) as MatchEntry) : null;
   }
   async deleteMatch(matchId: string): Promise<MatchEntry | null> {
-    // Atomic take (Lua): HGET+HDEL as one step so two nodes racing teardown
-    // can't both read the match. (HGETDEL is Redis >=7.4; we target 7.2.)
+    // Atomic take (Lua): read + HDEL the match AND clear both users' index
+    // entries as one step, so two nodes racing teardown can't both process it
+    // or leave a stale user->match pointer. (HGETDEL is Redis >=7.4; we
+    // target 7.2, and cjson ships with Redis Lua.)
     const script = `
       local v = redis.call('HGET', KEYS[1], ARGV[1])
-      if v then redis.call('HDEL', KEYS[1], ARGV[1]) end
+      if not v then return nil end
+      redis.call('HDEL', KEYS[1], ARGV[1])
+      local m = cjson.decode(v)
+      for _, u in ipairs({m.user1, m.user2}) do
+        if redis.call('HGET', KEYS[2], u) == ARGV[1] then
+          redis.call('HDEL', KEYS[2], u)
+        end
+      end
       return v
     `;
     const raw = (await this.redis.eval(script, {
-      keys: ['m:active'],
+      keys: ['m:active', 'm:byuser'],
       arguments: [matchId],
     })) as string | null;
-    if (!raw) return null;
-    const match = JSON.parse(raw) as MatchEntry;
-    await this.redis.sRem('m:users', [match.user1, match.user2]);
-    return match;
+    return raw ? (JSON.parse(raw) as MatchEntry) : null;
   }
   async isUserInMatch(userId: string): Promise<boolean> {
-    return (await this.redis.sIsMember('m:users', userId)) === 1;
+    return Boolean(await this.redis.hExists('m:byuser', userId));
+  }
+  async getMatchForUser(userId: string): Promise<MatchEntry | null> {
+    const matchId = (await this.redis.hGet('m:byuser', userId)) as string | null;
+    if (!matchId) return null;
+    const raw = (await this.redis.hGet('m:active', matchId)) as string | null;
+    if (!raw) {
+      // Orphaned pointer (crash between writes) — self-heal.
+      await this.redis.hDel('m:byuser', userId);
+      return null;
+    }
+    return JSON.parse(raw) as MatchEntry;
   }
   async listMatches(): Promise<Array<[string, MatchEntry]>> {
     const all = await this.redis.hGetAll('m:active');

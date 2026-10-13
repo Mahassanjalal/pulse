@@ -166,6 +166,18 @@ async function start() {
     // transport buffer well below the 1MB default so a malicious client can't
     // push megabyte frames at the server.
     maxHttpBufferSize: 100 * 1024,
+    // Phase 2: NATIVE PING/PONG IS THE LIVENESS MECHANISM. The server pings
+    // every 25s and disconnects sockets that don't answer within 20s
+    // (~45s worst-case detection) — replacing the old custom 90s heartbeat
+    // timeout (which duplicated it and could disagree with it). These are
+    // engine-level liveness packets: clients answer automatically, they do
+    // not go through app code. Keep them BELOW any load-balancer idle
+    // timeouts (usually >=60s) so LBs never sever healthy sockets.
+    pingInterval: Number(process.env.SOCKET_PING_INTERVAL_MS || 25_000),
+    pingTimeout: Number(process.env.SOCKET_PING_TIMEOUT_MS || 20_000),
+    // Reject malformed handshakes fast — a slow-loris style connection that
+    // never completes auth shouldn't hold a slot for the 60s default.
+    connectTimeout: Number(process.env.SOCKET_CONNECT_TIMEOUT_MS || 10_000),
   });
 
   // Phase 1/2: shared realtime state + cross-node broadcasts.

@@ -13,6 +13,70 @@ import type { RealtimeStateStore } from '../lib/state/types';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
+// ---------------------------------------------------------------------------
+// Phase 3 expectations — shared so the memory AND redis stores are held to
+// byte-identical priority/dequeue semantics.
+// ---------------------------------------------------------------------------
+
+async function expectPriorityOrdering(s: RealtimeStateStore) {
+  const t0 = 1_000_000;
+  // Free user joins FIRST; a premium user joining a second later must sort
+  // ahead of them (bounded 30s head start) — and a free user who has waited
+  // longer than the head start must still beat a freshly-joined premium
+  // user (fairness floor: no starvation).
+  await s.joinQueue('free1', { socketId: 'f1', joinedAt: t0 });
+  await s.joinQueue('prem1', { socketId: 'p1', joinedAt: t0 + 1000, premium: true });
+  await s.joinQueue('free2', { socketId: 'f2', joinedAt: t0 + 2000 });
+  await s.joinQueue('prem2', { socketId: 'p2', joinedAt: t0 + 90_000, premium: true });
+
+  const order = (await s.listQueue()).map(([id]) => id);
+  // scores: prem1=971k < free1=1.000m < free2=1.002m < prem2=1.061m
+  expect(order).toEqual(['prem1', 'free1', 'free2', 'prem2']);
+  expect(await s.queueSize()).toBe(4);
+  for (const id of order) await s.leaveQueue(id);
+  expect(await s.queueSize()).toBe(0);
+}
+
+async function expectClaimDequeue(s: RealtimeStateStore) {
+  await s.joinQueue('cand', { socketId: 's1', joinedAt: 5000 });
+
+  // Atomic dequeue: the entry comes back once and is claimed; a second
+  // scanner on any node must lose (null) — no double-claim is possible.
+  expect(await s.claimCandidate('cand')).toEqual({ socketId: 's1', joinedAt: 5000 });
+  expect(await s.claimCandidate('cand')).toBeNull();
+
+  // Dequeued = invisible to scanners, but the DATA survives for requeue.
+  expect(await s.listQueue()).toEqual([]);
+  expect(await s.queueSize()).toBe(0);
+  expect((await s.getQueueEntry('cand'))?.socketId).toBe('s1');
+
+  // Requeue restores the candidate with their ORIGINAL priority position
+  // (skipping must not cost queue order) and clears the claim.
+  await s.joinQueue('later', { socketId: 's2', joinedAt: 9000 });
+  await s.requeueCandidate('cand', { socketId: 's1', joinedAt: 5000 });
+  expect((await s.listQueue()).map(([id]) => id)).toEqual(['cand', 'later']);
+  expect(await s.claimCandidate('cand')).toBeTruthy(); // claim was cleared
+
+  await s.leaveQueue('cand');
+  await s.leaveQueue('later');
+  await s.releaseUsers('cand');
+  expect(await s.queueSize()).toBe(0);
+}
+
+async function expectMatchIndex(s: RealtimeStateStore) {
+  await s.addMatch({ user1: 'mu1', user2: 'mu2', matchId: 'mm1', startTime: 1 });
+  expect(await s.isUserInMatch('mu1')).toBe(true);
+  // O(1) user -> match (Phase 2 reconnect replay relies on this).
+  expect(await s.getMatchForUser('mu1')).toMatchObject({ matchId: 'mm1', user2: 'mu2' });
+  expect(await s.getMatchForUser('mu-stranger')).toBeNull();
+
+  expect(await s.deleteMatch('mm1')).toMatchObject({ matchId: 'mm1' });
+  expect(await s.getMatchForUser('mu1')).toBeNull();
+  expect(await s.isUserInMatch('mu2')).toBe(false);
+  // Idempotent teardown: a second delete (two nodes racing) gets null.
+  expect(await s.deleteMatch('mm1')).toBeNull();
+}
+
 function conformance(name: string, get: () => RealtimeStateStore) {
   describe(`store semantics: ${name}`, () => {
     it('queue: join/list/leave and size', async () => {
@@ -86,6 +150,18 @@ function conformance(name: string, get: () => RealtimeStateStore) {
       expect(await s.hasSockets('t1')).toBe(false);
       // Removing an unknown socket of an unknown user: last=true (no-op safe)
       expect(await s.removeSocket('ghost', 'nope')).toEqual({ last: true });
+    });
+
+    it('phase3: priority ordering (premium lane + fairness floor)', async () => {
+      await expectPriorityOrdering(get());
+    });
+
+    it('phase3: atomic claim-dequeue + requeue keeps original position', async () => {
+      await expectClaimDequeue(get());
+    });
+
+    it('phase3: O(1) user->match index for reconnect replay', async () => {
+      await expectMatchIndex(get());
     });
 
     it('presence: set/get/touch and batch reads', async () => {
@@ -169,6 +245,11 @@ describe('store semantics: redis (requires local Redis, skips otherwise)', () =>
     expect(await s.onlineCount()).toBeGreaterThanOrEqual(1);
     await s.setPresence('rp1', 'OFFLINE', 456);
     expect((await s.onlineCount())!).toBe(0);
+
+    // Phase 3: same priority/dequeue/index expectations as the memory suite.
+    await expectPriorityOrdering(s);
+    await expectClaimDequeue(s);
+    await expectMatchIndex(s);
   });
 });
 

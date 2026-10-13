@@ -30,18 +30,19 @@ interface SocketAuth extends Socket {
 // Phase 1: queue/claims/matches/pending-calls/socket-registry/presence all
 // live behind RealtimeStateStore (Redis when REDIS_URL is set, memory
 // otherwise) so multiple API nodes share one realtime view. Only NODE-LOCAL
-// things remain as Maps here:
+// thing left as a Map here:
 //  - pending call ring timers (owned by the node that created the call)
-//  - heartbeat timers (owned by the node that owns the socket)
+//
+// Phase 2: DEAD-SOCKET DETECTION IS NOW SOCKET.IO'S NATIVE PING/PONG
+// (configured in server.ts). The old custom 90s `heartbeat` timeout that
+// duplicated it is gone; the `heartbeat` EVENT remains purely as a
+// lastSeen/presence freshness signal (client emits every 30s).
 const pendingCallTimers = new Map<string, NodeJS.Timeout>();
-const heartbeatTimers = new Map<string, NodeJS.Timeout>();
 
 /** Shortcut to the active state store. */
 function store(): RealtimeStateStore {
   return getStore();
 }
-
-const HEARTBEAT_TIMEOUT = 90000; // 90s without heartbeat -> disconnect
 
 const peerSelect = {
   id: true,
@@ -103,50 +104,105 @@ async function isUserInMatch(userId: string): Promise<boolean> {
 const GENDER_RELAX_MS = Number(process.env.MATCH_GENDER_RELAX_MS || 10_000);
 const QUEUE_SWEEP_INTERVAL_MS = Number(process.env.MATCH_QUEUE_SWEEP_MS || 5_000);
 const QUEUE_SWEEP_MIN_AGE_MS = 5_000;
+// Phase 3: premium match FILTERS widen on a wait clock too (they used to be
+// absolute, so a premium user with a niche filter could wait forever):
+// gender filter relaxes first, then region — same "a slightly less-filtered
+// match beats an infinite queue" principle as the free-tier gender grace.
+const FILTER_GENDER_RELAX_MS = Number(process.env.MATCH_FILTER_GENDER_RELAX_MS || 15_000);
+const FILTER_REGION_RELAX_MS = Number(process.env.MATCH_FILTER_REGION_RELAX_MS || 30_000);
 
 type PairOutcome = 'paired' | 'skip' | 'fail';
 
+/** The scanning user's context. `joinedAt` drives wait-based widening. */
+interface ScanUser {
+  userId: string;
+  socketId: string;
+  targetGender: string | null;
+  filters?: any;
+  joinedAt: number;
+}
+
+/**
+ * Phase 3 preference widening: does the scanning user's CURRENT preference
+ * still exclude this candidate? Preferences relax on the scanner's own wait
+ * clock:
+ *   - free-tier gender roll   -> relaxes after GENDER_RELAX_MS
+ *   - premium gender filter   -> relaxes after FILTER_GENDER_RELAX_MS
+ *   - premium region filter   -> relaxes after FILTER_REGION_RELAX_MS
+ * (The pre-Phase-3 grace checked the CANDIDATE's wait, which is not what
+ * the preference belongs to — and premium filters never widened at all.)
+ */
+async function preferenceAllows(me: ScanUser, candidateId: string): Promise<boolean> {
+  const needsGender = !!me.targetGender || !!me.filters?.gender;
+  const needsRegion = !!me.filters?.country;
+  if (!needsGender && !needsRegion) return true;
+
+  const waited = Date.now() - (me.joinedAt || Date.now());
+  const relaxGender = !me.targetGender || waited >= GENDER_RELAX_MS;
+  const relaxFilterGender = !me.filters?.gender || waited >= FILTER_GENDER_RELAX_MS;
+  const relaxRegion = !me.filters?.country || waited >= FILTER_REGION_RELAX_MS;
+  if (relaxGender && relaxFilterGender && relaxRegion) return true; // no DB hit
+
+  const peerUser = await prisma.user.findUnique({
+    where: { id: candidateId },
+    select: { gender: true, country: true },
+  });
+  if (!peerUser) return true; // vanished candidate -> caller handles via fetch
+
+  if (!relaxGender && peerUser.gender !== me.targetGender) return false;
+  if (!relaxFilterGender && peerUser.gender !== me.filters?.gender) return false;
+  if (!relaxRegion && peerUser.country !== me.filters?.country) return false;
+  return true;
+}
+
 /**
  * Try to pair `me` with one specific waiting candidate. Shared by the
- * start_matching scan and the queue sweeper so both follow identical rules
- * (atomic claim, blocklist, gender grace, peer fetch, match creation,
- * match_found emits to BOTH nodes via the adapter).
+ * start_matching scan and the queue sweeper so both follow identical rules.
+ *
+ * Phase 3 flow (atomic dequeue):
+ *   1. `claimCandidate(candidateId)` — ONE atomic step verifies the candidate
+ *      is unclaimed, REMOVES them from the priority queue (hidden from every
+ *      other scanner on every node) and sets their handshake claim. The old
+ *      list -> getQueueEntry -> claimUsers sequence had a non-atomic window.
+ *   2. claim `me` too, so two scanners can't pair me simultaneously.
+ *   3. eligibility: liveness, blocklist, wait-widened preferences.
+ *   4. on success: dequeue me, create the match, emit to both (Redis adapter
+ *      delivers cross-node). On skip/fail: the candidate is requeued with
+ *      their ORIGINAL priority score — no position is lost.
  */
 async function tryPairWith(
   io: Server,
-  me: { userId: string; socketId: string; targetGender: string | null; filters?: any },
+  me: ScanUser,
   candidateId: string,
-  candidate: QueueEntry,
 ): Promise<PairOutcome> {
   if (candidateId === me.userId) return 'skip';
 
-  // Re-check after listQueue: the candidate may have cancelled/disconnected
-  // since the snapshot was taken (claims alone would pair a gone user).
-  const fresh = await store().getQueueEntry(candidateId);
-  if (!fresh) return 'skip';
+  // Phase 3 atomic dequeue — null means gone / already claimed by a scanner
+  // on another node (the Lua is indivisible, so no double-claim is possible).
+  const candidate = await store().claimCandidate(candidateId);
+  if (!candidate) return 'skip';
 
-  // Atomic both-or-nothing claim (Lua in Redis): no two scanners can pair
-  // the same candidate.
-  if (!(await store().claimUsers(candidateId, me.userId))) return 'skip';
+  // Whether the candidate stays out of the queue: only a successful pairing
+  // (or an explicit drop of a dead user) keeps them dequeued; every other
+  // outcome restores them with their original score.
+  let candidateKeptOut = false;
 
   try {
-    if (await isBlocked(me.userId, candidateId)) return 'skip';
+    // Only one scanner may pair `me` at a time.
+    if (!(await store().claimUsers(me.userId))) return 'skip';
 
-    if (me.targetGender) {
-      // Grace: ignore the preference once the candidate has waited long
-      // enough — a slightly less-biased match beats an infinite queue.
-      const waited = Date.now() - (candidate.joinedAt ?? Date.now());
-      if (waited < GENDER_RELAX_MS) {
-        const peerUser = await prisma.user.findUnique({
-          where: { id: candidateId },
-          select: { gender: true },
-        });
-        if (peerUser && peerUser.gender !== me.targetGender) return 'skip';
-      }
+    // The claim survived a moment of churn; verify the candidate still has a
+    // live socket ANYWHERE (cross-node) before doing database work. A
+    // disconnecting user must not be paired into a phantom match.
+    if (!(await store().hasSockets(candidateId))) {
+      await store().leaveQueue(candidateId); // purge dead entry (hash + score)
+      candidateKeptOut = true;
+      return 'skip';
     }
 
-    await store().leaveQueue(candidateId);
-    await store().leaveQueue(me.userId);
+    if (await isBlocked(me.userId, candidateId)) return 'skip';
+
+    if (!(await preferenceAllows(me, candidateId))) return 'skip';
 
     const [peer1, peer2] = await Promise.all([
       prisma.user.findUnique({
@@ -160,15 +216,14 @@ async function tryPairWith(
     ]);
 
     if (!peer1 || !peer2) {
-      // Put BOTH users back — the old code silently dropped the candidate.
-      await store().joinQueue(candidateId, candidate);
-      await store().joinQueue(me.userId, {
-        socketId: me.socketId,
-        filters: me.filters,
-        joinedAt: Date.now(),
-      });
+      // Candidate stays recoverable (requeue below); `me` was never dequeued
+      // (only success removes me), so both simply keep waiting.
       return 'fail';
     }
+
+    // Dequeue me — candidate was dequeued by claimCandidate.
+    await store().leaveQueue(me.userId);
+    candidateKeptOut = true;
 
     const peer1Interests: string[] = JSON.parse(peer1.interests || '[]');
     const peer2Interests: string[] = JSON.parse(peer2.interests || '[]');
@@ -183,10 +238,6 @@ async function tryPairWith(
       },
     });
 
-    // Handshake window over — release the claims (never released after a
-    // match in the original code, which permanently broke matching after one
-    // completed/skipped match).
-    await store().releaseUsers(candidateId, me.userId);
     await store().addMatch({ user1: candidateId, user2: me.userId, matchId: match.id, startTime: Date.now() });
 
     io.to(candidate.socketId).emit('match_found', {
@@ -227,9 +278,12 @@ async function tryPairWith(
     console.error('pairing error:', err);
     return 'fail';
   } finally {
-    // Release claims only when still held (paired/fail paths already
-    // released/kept them appropriately — release is idempotent either way,
-    // but a 'skip' must release so the candidate stays claimable).
+    // Restore an unpaired candidate with their ORIGINAL priority score
+    // (claimCandidate removed them; skipping must not cost queue position),
+    // then release both claims (idempotent — already-released paths no-op).
+    if (!candidateKeptOut) {
+      await store().requeueCandidate(candidateId, candidate).catch(() => {});
+    }
     await store().releaseUsers(candidateId, me.userId);
   }
 }
@@ -267,18 +321,6 @@ async function broadcastPresence(io: Server, userId: string, status: string, las
   } catch (err) {
     console.error('Broadcast presence error:', err);
   }
-}
-
-function resetHeartbeat(socket: Socket, userId: string): void {
-  const existing = heartbeatTimers.get(socket.id);
-  if (existing) clearTimeout(existing);
-
-  const timer = setTimeout(async () => {
-    console.log(`Heartbeat timeout for ${socket.id} (user: ${userId})`);
-    socket.disconnect();
-  }, HEARTBEAT_TIMEOUT);
-
-  heartbeatTimers.set(socket.id, timer);
 }
 
 export function setupSocketHandlers(io: Server, app: FastifyInstance) {
@@ -385,34 +427,52 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // Multi-tab connection tracking — shared across nodes so node A losing
     // its last LOCAL socket no longer marks a user offline while their tab on
     // node B is still live (audit H11 sibling issue in multi-node setups).
-    const { first: wasOffline } = await store().addSocket(userId, socket.id);
+    // Multi-tab connection tracking — shared across nodes so node A losing
+    // its last LOCAL socket no longer marks a user offline while their tab on
+    // node B is still live (audit H11 sibling issue in multi-node setups).
+    //
+    // IMPORTANT (reconnect storms): this is NOT awaited here. Awaiting it
+    // left a window between connection start and listener registration during
+    // which Socket.IO silently DROPS client events — reconnecting clients
+    // re-emit `start_matching` immediately and were left "searching" with no
+    // server response (0/400 answered in the storm load test). All listeners
+    // below now bind synchronously; socket registration completes in the
+    // background and `disconnect` awaits it so removal can never race ahead
+    // of insertion.
+    const socketsAdded = store().addSocket(userId, socket.id);
 
-    // Start heartbeat timer
-    resetHeartbeat(socket, userId);
+    // Phase 2: liveness is Socket.IO's native ping/pong (server.ts) — no
+    // custom per-socket timeout timer to start here. A dead client is
+    // disconnected within pingInterval+pingTimeout (~45s) by the engine.
 
     // M4: the old heartbeat wrote `lastSeen` to the DB on EVERY beat (every
     // 30s per user — ~16k writes/s at 500k users). Liveness now goes to the
-    // state store (Redis O(1) set, no DB) and the DB write is throttled to at
-    // most once per minute per socket.
+    // state store (Redis O(1) set, no DB) and the DB write is throttled to
+    // at most once per minute per socket.
     let lastSeenWriteAt = 0;
 
     // If this is the first connection, mark as ONLINE and broadcast
-    if (wasOffline) {
-      prisma.user.update({
-        where: { id: userId },
-        data: { status: 'ONLINE', lastSeen: new Date() },
-      }).then(async () => {
+    void socketsAdded.then(async ({ first: wasOffline }) => {
+      if (!wasOffline) return;
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { status: 'ONLINE', lastSeen: new Date() },
+        });
         await store().setPresence(userId, 'ONLINE', Date.now());
         broadcastPresence(io, userId, 'ONLINE', new Date());
-      }).catch(err => console.error('Status update error:', err));
-    }
+      } catch (err) {
+        console.error('Status update error:', err);
+      }
+    });
 
     // ======================================
     // HEARTBEAT
     // ======================================
 
     socket.on('heartbeat', () => {
-      resetHeartbeat(socket, userId);
+      // NOTE (Phase 2): this event no longer controls liveness — receiving it
+      // just refreshes freshness data. Native ping/pong handles dead sockets.
       const now = Date.now();
       // Cheap liveness updates land in the state store (Redis) on every beat;
       // the Postgres write is throttled to >=1/min per socket.
@@ -462,8 +522,57 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // ======================================
 
     socket.on('start_matching', async (data) => {
+      try {
       if (authSocket.isLocked) {
         socket.emit('error', { message: 'Account locked. Pay $10 to unlock and reconnect.', code: 'ACCOUNT_LOCKED' });
+        return;
+      }
+
+      // Phase 2 reconnect replay: if this user is ALREADY in an active match
+      // (their client reconnected and may have MISSED `match_found`), replay
+      // the live match instead of re-queueing them — re-queueing an in-call
+      // user would let them be matched a second time, and the client's
+      // "still searching" state would go stale forever.
+      const activeMatch = await store().getMatchForUser(userId);
+      if (activeMatch) {
+        const peerId = activeMatch.user1 === userId ? activeMatch.user2 : activeMatch.user1;
+        const [dbMatch, peer] = await Promise.all([
+          prisma.match.findUnique({ where: { id: activeMatch.matchId }, select: { user1Id: true } }),
+          prisma.user.findUnique({
+            where: { id: peerId },
+            select: { ...peerSelect, status: true },
+          }),
+        ]);
+        if (peer) {
+          const interests: string[] = JSON.parse(peer.interests || '[]');
+          socket.emit('match_found', {
+            matchId: activeMatch.matchId,
+            isInitiator: dbMatch?.user1Id === userId,
+            peer: {
+              id: peer.id,
+              displayName: peer.displayName,
+              profilePicture: peer.profilePicture,
+              age: peer.age,
+              country: peer.country,
+              interests,
+              gender: peer.gender,
+              status: peer.status,
+              isVerified: peer.isVerified,
+              isPremium: peer.isPremium,
+            },
+            replay: true,
+          });
+          return;
+        }
+        // Peer record vanished (account deleted) — fall through to normal
+        // matching; the orphaned match will be torn down by end/skip paths.
+      }
+
+      // Phase 3c: matchmaking/requeue rate limit. Reconnects re-queue through
+      // this same path, so the budget must stay generous (20/min) — it exists
+      // to stop hot-loop queue churn, not honest retries.
+      if (!hit(`start_match:${userId}`, 20, 60_000)) {
+        socket.emit('error', { message: 'Matchmaking requests are coming too fast. Please wait a moment.', code: 'MATCH_RATE' });
         return;
       }
 
@@ -482,29 +591,43 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         const roll = Math.random();
         targetGender = roll < 0.75 ? userGender : (userGender === 'MALE' ? 'FEMALE' : 'MALE');
       }
+      const joinedAt = Date.now();
       await store().joinQueue(userId, {
         socketId: socket.id,
         filters: isPremium ? data?.filters : undefined,
-        joinedAt: Date.now(),
+        joinedAt,
         targetGender,
+        premium: !!isPremium, // Phase 3 priority lane (bounded head start)
       });
       await store().setPresence(userId, 'MATCHING', Date.now());
 
-      const me = {
+      const me: ScanUser = {
         userId,
         socketId: socket.id,
         targetGender,
         filters: isPremium ? data?.filters : undefined,
+        joinedAt,
       };
 
       try {
-        // Shared queue: candidates come from the state store, so any node can
-        // pair any waiting user. tryPairWith does the atomic claim, blocklist,
-        // gender-grace check and match creation atomically.
-        for (const [waitingUserId, waitingData] of await store().listQueue()) {
-          const outcome = await tryPairWith(io, me, waitingUserId, waitingData);
+        // Shared PRIORITY queue (Phase 3): listQueue returns candidates in
+        // score order — premium head start first, then FIFO — so scanners
+        // walk the fairest candidate first and no one can be starved by
+        // arbitrary hash order. tryPairWith does the atomic dequeue,
+        // liveness/blocklist/preference checks and match creation.
+        //
+        // SCAN CAP: each candidate costs DB round-trips (liveness, blocklist,
+        // preferences), so a joiner only inspects the first N of the queue.
+        // If nobody in that window is compatible, the periodic sweeper —
+        // which re-scans waiting users under the same rules — pairs them
+        // later. This bounds per-join work O(1) instead of O(queue length),
+        // which matters during reconnect storms (thousands of re-joins).
+        let scanned = 0;
+        for (const [waitingUserId] of await store().listQueue()) {
+          if (scanned++ >= 25) break;
+          const outcome = await tryPairWith(io, me, waitingUserId);
           if (outcome === 'paired') return;
-          if (outcome === 'fail') break; // requeued inside; stop this pass
+          if (outcome === 'fail') break; // transient DB failure; stop this pass
           // 'skip' -> keep scanning the next candidate
         }
       } catch (err) {
@@ -519,6 +642,14 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       }
 
       socket.emit('matching_queue', { queuePosition: await store().queueSize(), status: 'waiting' });
+      } catch (err) {
+        // Top-level guard: anything that throws BEFORE the pairing scan (e.g.
+        // the status update under DB contention) must still answer the
+        // client — a silent drop leaves "searching" UI stale forever and was
+        // observed during reconnect-storm load tests.
+        console.error('start_matching handler error:', err);
+        socket.emit('error', { message: 'Matchmaking error. Please try again.' });
+      }
     });
 
     socket.on('cancel_matching', async () => {
@@ -897,6 +1028,27 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // ======================================
 
     socket.on('skip_match', async (data: { matchId: string }) => {
+      // Phase 3c: rapid-skip abuse signal. The skip itself is ALWAYS honored
+      // (refusing would trap the user in a call with someone they don't want)
+      // — we warn the user, rate-limit the SIGNAL log, and emit a structured
+      // `abuse_signal` record that Phase-5 moderation/trust scoring consumes.
+      if (!hit(`skip:${userId}`, 8, 60_000)) {
+        if (hit(`skip_sig:${userId}`, 3, 60_000)) {
+          console.warn(
+            JSON.stringify({
+              evt: 'abuse_signal',
+              kind: 'rapid_skip',
+              userId,
+              at: new Date().toISOString(),
+            }),
+          );
+        }
+        socket.emit('error', {
+          message: 'You are skipping matches very quickly. Slow down to keep matching fair.',
+          code: 'SKIP_RATE',
+        });
+      }
+
       const match = await store().deleteMatch(data.matchId);
       if (!match) return;
 
@@ -1033,14 +1185,11 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     // ======================================
 
     socket.on('disconnect', async () => {
+      // Socket registration runs in the background (see above) — wait for it
+      // so removeSocket can never run BEFORE addSocket inserts this socket
+      // id (which would leak a permanently "online" phantom entry).
+      await socketsAdded.catch(() => {});
       console.log(`Socket disconnected: ${socket.id} (user: ${userId})`);
-
-      // Clear heartbeat timer
-      const timer = heartbeatTimers.get(socket.id);
-      if (timer) {
-        clearTimeout(timer);
-        heartbeatTimers.delete(socket.id);
-      }
 
       // Remove from waiting pool — but ONLY if THIS socket is the one that
       // queued the user (H11). Previously any secondary tab closing silently
@@ -1100,16 +1249,19 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           await store().leaveQueue(waitingUserId);
           continue;
         }
-        const me = {
+        const me: ScanUser = {
           userId: waitingUserId,
           socketId: waitingData.socketId,
           targetGender: waitingData.targetGender ?? null,
           filters: waitingData.filters,
+          // Preserve the ORIGINAL join time: the sweeper must widen
+          // preferences on the same clock the join scan used.
+          joinedAt: waitingData.joinedAt ?? now,
         };
         for (const [otherId, otherEntry] of entries) {
           if (otherId === waitingUserId) continue;
           if (now - (otherEntry.joinedAt ?? 0) < QUEUE_SWEEP_MIN_AGE_MS) continue;
-          const outcome = await tryPairWith(io, me, otherId, otherEntry);
+          const outcome = await tryPairWith(io, me, otherId);
           if (outcome === 'paired' || outcome === 'fail') break;
         }
       }
