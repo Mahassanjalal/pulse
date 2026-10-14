@@ -15,14 +15,14 @@ import type {
  *   q:wait                 HASH  userId -> JSON(QueueEntry)     (matchmaking queue data)
  *   q:rank                 ZSET  userId score=queueScore        (Phase 3 priority order:
  *                              premium head start + FIFO; ZPOPMIN-style atomic dequeue)
- *   q:claim:{userId}       STRING "1" EX 60                     (handshake claim, TTL-capped)
+ *   q:claim:{userId}       STRING "1" EX MATCH_CLAIM_TTL_S    (handshake claim, TTL-capped)
  *   m:active               HASH  matchId -> JSON(MatchEntry)    (active matches)
  *   m:byuser               HASH  userId -> matchId              (O(1) in-call + reconnect replay)
  *   call:{callId}          STRING JSON(PendingCall) EX ttl      (pending direct call)
  *   call:for:{userId}      SET   callIds EX ttl                 (busy checks, both roles)
- *   conn:{userId}          SET   socketIds EX 180               (cross-node multi-tab)
- *   conn:sock:{socketId}   STRING "1" EX 180                    (per-socket lease, ghosts self-heal)
- *   pres:{userId}          HASH  {status,lastSeen} EX 180       (presence + heartbeat lease)
+ *   conn:{userId}          SET   socketIds EX SOCKET_LEASE_TTL_S  (cross-node multi-tab)
+ *   conn:sock:{socketId}   STRING "1" EX SOCKET_LEASE_TTL_S      (per-socket lease, ghosts self-heal)
+ *   pres:{userId}          HASH  {status,lastSeen} EX SOCKET_LEASE_TTL_S (presence + heartbeat lease)
  *   pres:status:{STATUS}   SET   userIds                        (status indexes incl. online count)
  *
  * Contention is resolved with small Lua scripts so two nodes can never
@@ -34,10 +34,19 @@ export class RedisRealtimeState implements RealtimeStateStore {
 
   private sweepTimer: NodeJS.Timeout | null = null;
 
+  /** Queue-handshake claim TTL (seconds) — bounds how long a crashed node can hold a claimed user. */
+  private readonly claimTtlS: number;
+  /** Socket/presence lease TTL (seconds) — bounds ghost sockets/presence after an ungraceful node death. */
+  private readonly leaseTtlS: number;
+
   constructor(
     private redis: RedisClient,
     sweepIntervalMs = Number(process.env.REDIS_SWEEP_INTERVAL_MS || 60_000),
   ) {
+    // Phase 6: configurable so chaos drills can shorten the self-heal window;
+    // floors keep a typo from disabling crash recovery entirely.
+    this.claimTtlS = Math.max(5, Number(process.env.MATCH_CLAIM_TTL_S || 60));
+    this.leaseTtlS = Math.max(5, Number(process.env.SOCKET_LEASE_TTL_S || 180));
     if (sweepIntervalMs > 0) {
       this.sweepTimer = setInterval(() => {
         this.sweepExpiredPresence().catch((err) => console.error('[state] presence sweep failed:', err));
@@ -98,10 +107,10 @@ export class RedisRealtimeState implements RealtimeStateStore {
       local data = redis.call('HGET', 'q:wait', uid)
       if not data then return nil end
       if redis.call('ZREM', 'q:rank', uid) == 0 then return nil end
-      redis.call('SET', 'q:claim:' .. uid, '1', 'EX', 60)
+      redis.call('SET', 'q:claim:' .. uid, '1', 'EX', ARGV[2])
       return data
     `;
-    const raw = (await this.redis.eval(script, { keys: [], arguments: [userId] })) as string | null;
+    const raw = (await this.redis.eval(script, { keys: [], arguments: [userId, String(this.claimTtlS)] })) as string | null;
     return raw ? (JSON.parse(raw) as QueueEntry) : null;
   }
   async requeueCandidate(userId: string, entry: QueueEntry): Promise<void> {
@@ -133,7 +142,7 @@ export class RedisRealtimeState implements RealtimeStateStore {
     `;
     const result = await this.redis.eval(script, {
       keys: [],
-      arguments: ['60', ...userIds],
+      arguments: [String(this.claimTtlS), ...userIds],
     });
     return Number(result) === 1;
   }
@@ -252,7 +261,7 @@ export class RedisRealtimeState implements RealtimeStateStore {
     `;
     const result = await this.redis.eval(script, {
       keys: [],
-      arguments: [userId, socketId, '180'],
+      arguments: [userId, socketId, String(this.leaseTtlS)],
     });
     return { first: Number(result) === 1 };
   }
@@ -276,7 +285,7 @@ export class RedisRealtimeState implements RealtimeStateStore {
   }
   async touchConnections(userId: string): Promise<void> {
     const pipeline = this.redis.multi();
-    pipeline.expire(`conn:${userId}`, 180);
+    pipeline.expire(`conn:${userId}`, this.leaseTtlS);
     await pipeline.exec();
   }
   async hasSockets(userId: string): Promise<boolean> {
@@ -299,7 +308,7 @@ export class RedisRealtimeState implements RealtimeStateStore {
     `;
     await this.redis.eval(script, {
       keys: [],
-      arguments: [userId, status, String(lastSeenMs), '180'],
+      arguments: [userId, status, String(lastSeenMs), String(this.leaseTtlS)],
     });
   }
   async touchLastSeen(userId: string, lastSeenMs: number): Promise<void> {
@@ -314,7 +323,7 @@ export class RedisRealtimeState implements RealtimeStateStore {
       redis.call('EXPIRE', pkey, ttl)
       return 1
     `;
-    await this.redis.eval(script, { keys: [], arguments: [userId, String(lastSeenMs), '180'] });
+    await this.redis.eval(script, { keys: [], arguments: [userId, String(lastSeenMs), String(this.leaseTtlS)] });
   }
   async getPresence(userId: string): Promise<PresenceEntry | null> {
     const data = await this.redis.hGetAll(`pres:${userId}`);

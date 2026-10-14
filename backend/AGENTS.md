@@ -14,6 +14,7 @@ Node.js + TypeScript (CommonJS). **Fastify v5**, **Prisma v5** (SQLite `prisma/d
 - Swagger UI at `http://localhost:3000/docs`
 - `./scripts/use-db.sh sqlite|postgres` — switch Prisma provider + regenerate
 - `node scripts/e2e-match.mjs` / `e2e-cross-node.mjs` — live matching E2E (needs a running server; cross-node needs 2 + Redis)
+- `node scripts/chaos-drill.mjs` — Phase 6 chaos drill: spawns 2 nodes on isolated Redis db 9, SIGKILLs one mid-match, asserts survivor + lease/claim self-heal (exit 0 = PASS)
 - `node scripts/pglite-wire.mjs` — WASM Postgres over the wire protocol for PG verification without a system install (use `?connection_limit=1`)
 - `DATABASE_URL=... ./scripts/copy-sqlite-to-pg.py` — migrate dev.db schema+data into Postgres
 
@@ -36,6 +37,8 @@ src/
     user.ts          # withRealCounts() recomputes friend/conversation counts
     stripe.ts        # optional Stripe client (null when STRIPE_SECRET_KEY empty)
     errors.ts        # ApiError, sendError
+    metrics.ts       # dependency-free Prometheus registry (Counters/Gauges/Histograms, 200-series cap) served at GET /metrics
+    state/           # RealtimeStateStore: memory + Redis (queue, claims, matches, sockets, presence)
   types/
     fastify.d.ts     # augments FastifyInstance with `io`
 ```
@@ -63,7 +66,14 @@ src/
 - In-match chat: persist `Message`, emit `match_message` to peer + `match_message_sent` to sender.
 - `skip_match`/`end_match`: update Match (status/duration, increment `totalConversations` on END), notify peer; rapid skips are counted as an abuse signal on the store.
 - Presence: join `user_{id}` room; broadcast `presence_changed` to friends on online/offline; multi-tab socket registry shared via the store (disconnect awaits registration so removal can't race insertion).
-- Load/E2E harnesses: `scripts/load-sockets.mjs` (connect/storm/match modes), `scripts/e2e-match.mjs`, `scripts/e2e-cross-node.mjs`. Raise `ulimit -n` for large runs.
+- Load/E2E harnesses: `scripts/load-sockets.mjs` (connect/storm/match modes), `scripts/e2e-match.mjs`, `scripts/e2e-cross-node.mjs`, `scripts/chaos-drill.mjs` (node-kill drill). Raise `ulimit -n` for large runs.
+
+## Observability (Phase 6)
+- **`GET /metrics`** — Prometheus text exposition from `lib/metrics.ts` (no `prom-client` dependency). `METRICS_TOKEN` (if set) requires `Authorization: Bearer <token>` (timing-safe compare); `ENABLE_METRICS=false` hides the route. Key series: `pulse_match_latency_seconds` (queue join → match_found per user), `pulse_matches_started_total`, `pulse_queue_depth` (gauge at scrape), `pulse_socket_connections_total`/`pulse_sockets_active`, `pulse_signaling_relayed_total`/`_dropped_total`, `pulse_ice_outcome_final`/`pulse_ice_transport_total`/`pulse_call_rtt_ms`/`pulse_call_duration_seconds` (client-reported via the `call_stats` socket event), `pulse_http_requests_total`/`pulse_http_request_duration_seconds` (route+status labels), `pulse_matchmaking_errors_total`/`_rate_limited_total`.
+- **Histograms use correct cumulative `le` semantics** — do not add `break` back to `Histogram.observe` (an early version only counted values ≤ the first bucket; unit tests guard this).
+- **Logging**: `socket/handlers.ts` has **zero `console.*`** — use `activeLog` (pino via Fastify, set alongside `activeIo` in `setupSocketHandlers`). Rapid-skip abuse records are logged as `warn` with `evt: 'abuse_signal'`.
+- **Crash-recovery TTLs** (Redis store, env-tunable with floors): `MATCH_CLAIM_TTL_S` (default 60 — queue handshake claim) and `SOCKET_LEASE_TTL_S` (default 180 — `conn:*`/`pres:*` leases); presence-index sweeper interval `REDIS_SWEEP_INTERVAL_MS` (default 60s). The chaos drill sets these to 5s/5s/2s to observe self-heal quickly.
+- **Media instrumentation**: clients emit one `call_stats` sample per call (outcome/transport/rtt/duration); the handler whitelists values — metrics must never break a socket, wrap additions in try/catch.
 
 ## DB notes
 - Provider: SQLite by default (`prisma/dev.db`). Postgres: `./scripts/use-db.sh postgres`, bootstrap empty DBs with `prisma/postgres-baseline.sql`, or move data with `scripts/copy-sqlite-to-pg.py`; regenerate `postgres-baseline.sql` whenever the schema changes while the provider is postgres (see the script header). Relations use `onDelete: Cascade` (deleting a user cascades most child rows).
@@ -82,3 +92,5 @@ src/
 - `friendsCount`/`totalConversations` columns are denormalized & often wrong; prefer `withRealCounts`.
 - `AuthInterceptor` on frontend auto-refreshes on 401 using `/auth/refresh`.
 - Don't commit `.env`; template is `.env.example`.
+- `.env` ships `UPLOAD_DIR=/data/uploads` (Railway volume) — locally boot fails with `EACCES` unless you override it to a writable path (scripts/drill use `/tmp/pulse-uploads`).
+- `tsx` **forks a child** to run the server: killing only the wrapper PID leaves the real server alive (observed: it kept serving heartbeats and refreshing "dead" leases). Kill the process group (`pkill -f 'src/server[.]ts'` in a command that doesn't also mention that literal string), not just `$!`.

@@ -2,7 +2,7 @@
 
 > Full-system review of the Pulse codebase (Fastify + Prisma/SQLite + Socket.IO backend, Angular 16 frontend) against a target of **500,000 concurrent users**, benchmarked against Azar, HOLLA, OmeTV, Chatrandom, Emerald Chat, Chatroulette, Monkey, LivU and Paltalk (2025–26 product research).
 >
-> Date: 2026-10-12 (Phase 0) / 2026-10-13 (Phases 1–3) · Status: **Phase 0 (security) + Phase 1 (data layer: Postgres + Redis) + Phase 2 (horizontal realtime) + Phase 3 (matching engine rewrite) IMPLEMENTED** (see implementation logs below).
+> Date: 2026-10-12 (Phase 0) / 2026-10-13 (Phases 1–3) / 2026-10-14 (Phases 4+6) · Status: **Phase 0 (security) + Phase 1 (data layer: Postgres + Redis) + Phase 2 (horizontal realtime) + Phase 3 (matching engine rewrite) + Phase 4/6 partial (media instrumentation + observability/chaos) IMPLEMENTED** (see implementation logs below).
 
 ## Implementation log (2026-10-12, this session)
 
@@ -103,13 +103,50 @@
 - Store conformance suite (41 tests incl. claim-dequeue ordering, premium score ordering, lease TTL) runs against memory **and** real Redis — both green; `e2e-match.mjs` and `e2e-cross-node.mjs` re-verified on the fixed build.
 
 ### Still open (needs infra / next phases)
-- **Phase 4**: media tier — coturn fleet + per-node TURN credential minting already exists; SFU decision (LiveKit/mediasoup) + simulcast; instrument relay %/ICE failure rate.
-- **Phase 5/6**: on-device blur-before-accept, sampled-frame moderation, SLO dashboards, chaos drills (node kill during matches is partially covered by the cross-node tests).
+- **Phase 4**: media tier — coturn fleet + per-node TURN credential minting config plumbing exists; SFU decision (LiveKit/mediasoup) + simulcast. ~~instrument relay %/ICE failure rate~~ **done (Phase 4/6 log: `call_stats` → Prometheus)**.
+- **Phase 5/6**: on-device blur-before-accept, sampled-frame moderation, Grafana dashboards/alerts (scrape endpoint exists). ~~chaos drills~~ **done — `scripts/chaos-drill.mjs` SIGKILLs a node mid-match (Phase 4/6 log)**.
 - M5 `/discover` & dashboard trending still sort the whole user table (now indexed; revisit with proper feeds).
 - M7 `withRealCounts` per profile view (needs cached counters).
 - M10 admin role-value validation.
 - M15/M16 privacy review + text moderation filter.
 - On-device blur-before-accept and sampled-frame moderation (Phase 5).
+
+---
+
+## Implementation log (2026-10-14, Phases 4+6 — media instrumentation + observability)
+
+**Call-quality telemetry and SLO-grade observability are wired end-to-end: a Prometheus metrics registry with live counters/histograms at `GET /metrics`, structured pino logging across the realtime layer (zero `console.*` left in `socket/handlers.ts`), client-reported ICE/call stats, tiered video bitrate caps, configurable crash-recovery TTLs, and a chaos drill that SIGKILLs a node mid-match and proves the survivor + self-heal paths.**
+
+### What shipped
+- **Metrics registry (`backend/src/lib/metrics.ts`)** — dependency-free counters/gauges/histograms with Prometheus text exposition, label escaping and a hard **200-series cardinality cap** per metric (overflow series instead of unbounded memory). Exposed at **`GET /metrics`** (optional `METRICS_TOKEN` bearer gate with timing-safe compare; `ENABLE_METRICS=false` hides it). Buckets are chosen for the plan's SLOs: match latency 50ms→30s, HTTP 5ms→10s, call duration 10s→1h.
+- **Instrumentation**: socket connections/active, matches created, **per-user match latency (queue join → `match_found`)**, queue depth at scrape, skips/ends, signaling relayed/dropped per event, in-match messages, matchmaking errors + rate-limit rejections, HTTP requests/duration by route+status, build info.
+- **Structured logging**: all 14 `console.*` sites in `socket/handlers.ts` replaced with pino through Fastify's logger (`activeLog`, set alongside `activeIo`) — connect/disconnect, start_matching, pairing/presence/sweep errors and the rapid-skip abuse signal (`evt: 'abuse_signal'`) are now machine-parseable.
+- **Phase 4 client telemetry (`call_stats`)**: `WebRTCService` reports **one final sample per call** — ICE outcome (`connected|failed|disconnected|closed`; a 5s grace keeps transient `disconnected` blips from poisoning the rate), selected candidate-pair **transport (udp/tcp/relay)**, **RTT** (`currentRoundTripTime`) and **connected duration**. The backend whitelists values into `pulse_ice_outcome_final`, `pulse_ice_transport_total`, `pulse_call_rtt_ms`, `pulse_call_duration_seconds` — real-world connectivity success is measurable for the first time.
+- **Media hardening (P4b)**: tiered send caps applied at peer-connection setup — free **640×480 / 800 kbps**, premium **1280×720 / 2.5 Mbps** (`track.applyConstraints` + `sender.setParameters().encodings[0].maxBitrate`), all best-effort so a negotiation failure can never break a call.
+- **Configurable crash-recovery TTLs**: `MATCH_CLAIM_TTL_S` (default 60 — queue handshake claim) and `SOCKET_LEASE_TTL_S` (default 180 — `conn:*`/`pres:*` leases), previously hard-coded Lua literals; floors of 5s keep a typo from disabling recovery. Presence-index sweeper interval was already env-driven (`REDIS_SWEEP_INTERVAL_MS`).
+- **Chaos drill (`backend/scripts/chaos-drill.mjs`)**: spawns two nodes on an isolated Redis db, forms a cross-node match, **SIGKILLs one node mid-match**, then asserts survivor health, lease + status-index self-heal, clean teardown + re-match with a fresh user, and stale-claim recovery. Kills the **process group** — `tsx` forks, and killing only the wrapper was observed to leave the real server alive, still refreshing "dead" leases.
+
+### Bug found + fixed while building this
+- **Histogram buckets silently undercounted**: the observe loop `break`-ed at the first bucket smaller than the observation, so **any value above the first bucket recorded no bucket at all** (e.g. a 7s latency against `[0.05, 0.1, …]` buckets) — p95s would have read ~0 forever. Caught by the new unit tests; buckets now use proper cumulative `le` semantics (tests guard against re-adding the `break`).
+
+### Verification (all on this build)
+| Check | Result |
+|---|---|
+| `tsc --noEmit` (backend) | clean |
+| `vitest run` | **55/55** (7 files; +14 metrics tests) |
+| frontend prod build | exit 0 (pre-existing 588.6 kB budget warning only) |
+| `e2e-match.mjs` (single node) | PASS (match + rematch-after-skip) |
+| `e2e-cross-node.mjs` (3000↔3001, shared Redis) | PASS (same matchId on both nodes + rematch) |
+| `chaos-drill.mjs` | **PASS — 13/13 assertions, kill→fully-healed 7.1s** |
+| live `/metrics` after e2e | `matches_started 3` + `match_latency_count 6` (node A), `1 + 2` (node B), `skip_total 2`, HTTP route/status series, `Content-Type: text/plain; version=0.0.4` |
+
+**Chaos-drill timings** (TTLs forced to 5s, sweeps 2–4s): survivor `/health` + socket stay up after SIGKILL; `conn:`+`pres:` leases self-healed in **2.5s**, presence indexes swept in **2.0s** (kill→fully-healed **7.1s**); a stale queue claim blocked **both** scan directions, self-healed in **5.0s**, and matching resumed with a fresh match.
+
+### Still open (media/observability)
+- coturn fleet + TURN credential minting per node (config plumbing exists; needs server deploy), SFU decision (LiveKit/mediasoup) + simulcast — Phase 4 proper.
+- Grafana dashboards/alerts on top of `/metrics` (scrape is ready; the UI is not built).
+- Server-side cross-check of ICE outcomes (currently client-reported only).
+- Real TURN connectivity test (needs a relay reachable from CI).
 
 ---
 

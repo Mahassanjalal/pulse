@@ -20,6 +20,7 @@ import { setNotificationIO } from './lib/notifications';
 import requestLogger from './plugins/request-logger';
 import { revokeExpiredPremium } from './routes/premium';
 import { initRealtimeStore, resetRealtimeStore, getStore } from './lib/state';
+import { metrics } from './lib/metrics';
 import { createAdapterClients } from './lib/redis';
 
 // M17: honor X-Forwarded-For from the platform load balancer so req.ip (used
@@ -113,6 +114,26 @@ async function start() {
 
   await app.register(multipart, {
     limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  });
+
+  // Phase 6 observability: per-route request metrics (bounded cardinality —
+  // the route PATTERN is the label, never the raw URL). Start time rides on
+  // the request via a Symbol to avoid decorating the request object.
+  const START = Symbol.for('pulse.reqStart');
+  app.addHook('onRequest', async (req) => {
+    (req as unknown as Record<symbol, number>)[START] = Date.now();
+  });
+  app.addHook('onResponse', async (req, reply) => {
+    try {
+      const start = (req as unknown as Record<symbol, number>)[START];
+      if (!start) return;
+      const route = req.routeOptions?.url ?? 'unmatched';
+      const statusClass = `${Math.floor(reply.statusCode / 100)}xx`;
+      metrics.httpRequests.inc({ route, status: statusClass });
+      metrics.httpDuration.observe((Date.now() - start) / 1000, { route });
+    } catch {
+      // metrics must never break a response
+    }
   });
 
   await registerRoutes(app);

@@ -9,10 +9,13 @@ import { SendMessageSchema } from '../lib/validators';
 import { hit } from '../lib/limits';
 import { setRealtimeHooks } from '../lib/realtime';
 import { getStore, type RealtimeStateStore, type QueueEntry } from '../lib/state';
+import { metrics } from '../lib/metrics';
 
 // Active Socket.IO server reference, set in setupSocketHandlers. Used by the
 // kickUser realtime hook (account locks, moderation).
 let activeIo: Server | null = null;
+// Pino logger for structured socket-layer logs (Phase 6), set with activeIo.
+let activeLog: FastifyInstance['log'] | null = null;
 
 async function unlockConversationAchievements(userId: string, total: number): Promise<void> {
   await unlockAchievement(userId, 'first_conversation', 1);
@@ -82,7 +85,7 @@ async function teardownMatch(
       },
     });
   } catch (err) {
-    console.error('teardownMatch db error:', err);
+    activeLog?.error({ err }, 'teardownMatch db error');
   }
 
   io.to(`user_${match.user1}`).emit(reason === 'skipped' ? 'match_skipped' : 'match_ended', { matchId, reason });
@@ -240,6 +243,12 @@ async function tryPairWith(
 
     await store().addMatch({ user1: candidateId, user2: me.userId, matchId: match.id, startTime: Date.now() });
 
+    // Phase 6: match latency = seconds each user waited from queue join to match_found.
+    metrics.matchesStarted.inc();
+    const pairedAt = Date.now();
+    if (candidate.joinedAt) metrics.matchLatency.observe((pairedAt - candidate.joinedAt) / 1000);
+    if (me.joinedAt) metrics.matchLatency.observe((pairedAt - me.joinedAt) / 1000);
+
     io.to(candidate.socketId).emit('match_found', {
       matchId: match.id,
       isInitiator: match.user1Id === candidateId,
@@ -275,7 +284,7 @@ async function tryPairWith(
 
     return 'paired';
   } catch (err) {
-    console.error('pairing error:', err);
+    activeLog?.error({ err }, 'pairing error');
     return 'fail';
   } finally {
     // Restore an unpaired candidate with their ORIGINAL priority score
@@ -319,12 +328,13 @@ async function broadcastPresence(io: Server, userId: string, status: string, las
       io.to(`user_${friendId}`).emit('presence_changed', { userId, status, lastSeen });
     }
   } catch (err) {
-    console.error('Broadcast presence error:', err);
+    activeLog?.error({ err }, 'broadcast presence error');
   }
 }
 
 export function setupSocketHandlers(io: Server, app: FastifyInstance) {
   activeIo = io;
+  activeLog = app.log;
 
   // Wire moderation hooks: locking an account now force-disconnects every
   // live socket for that user and purges them from queues/pending calls
@@ -364,7 +374,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         // other nodes too (the old code could only see local sockets).
         // Each socket's own disconnect handler then runs its local cleanup.
         await io.in(`user_${userId}`).disconnectSockets(true);
-      })().catch((err) => console.error('kickUser failed:', err));
+      })().catch((err) => activeLog?.error({ err }, 'kickUser failed'));
     },
   });
 
@@ -419,7 +429,9 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     const authSocket = socket as SocketAuth;
     const userId = authSocket.userId!;
 
-    console.log(`Socket connected: ${socket.id} (user: ${userId})`);
+    activeLog?.info({ socketId: socket.id, userId }, 'socket connected');
+    metrics.socketConnections.inc();
+    metrics.socketsActive.inc();
 
     // Join user's personal room
     socket.join(`user_${userId}`);
@@ -462,7 +474,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         await store().setPresence(userId, 'ONLINE', Date.now());
         broadcastPresence(io, userId, 'ONLINE', new Date());
       } catch (err) {
-        console.error('Status update error:', err);
+        activeLog?.error({ err }, 'presence status update failed');
       }
     });
 
@@ -572,11 +584,12 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       // this same path, so the budget must stay generous (20/min) — it exists
       // to stop hot-loop queue churn, not honest retries.
       if (!hit(`start_match:${userId}`, 20, 60_000)) {
+        metrics.matchmakingRateLimited.inc();
         socket.emit('error', { message: 'Matchmaking requests are coming too fast. Please wait a moment.', code: 'MATCH_RATE' });
         return;
       }
 
-      console.log(`User ${userId} started matching`);
+      activeLog?.debug({ userId }, 'start_matching');
 
       await prisma.user.update({
         where: { id: userId },
@@ -634,7 +647,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         // Any mid-handshake failure (e.g. DB error) must not leave stale
         // claims or drop the user on the floor: release and re-queue. Claims
         // are TTL-capped in Redis, so even a crashed node can't poison users.
-        console.error('start_matching error:', err);
+        metrics.matchmakingErrors.inc();
+        activeLog?.error({ err }, 'start_matching error');
         await store().releaseUsers(userId);
         await store().joinQueue(userId, { ...me, joinedAt: Date.now() });
         socket.emit('error', { message: 'Matchmaking error. Please try again.' });
@@ -647,7 +661,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         // the status update under DB contention) must still answer the
         // client — a silent drop leaves "searching" UI stale forever and was
         // observed during reconnect-storm load tests.
-        console.error('start_matching handler error:', err);
+        metrics.matchmakingErrors.inc();
+        activeLog?.error({ err }, 'start_matching handler error');
         socket.emit('error', { message: 'Matchmaking error. Please try again.' });
       }
     });
@@ -676,6 +691,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     socket.on('webrtc_offer', async (data: { matchId: string; offer: any }) => {
       const match = await store().getMatch(data.matchId);
       if (!match) {
+        metrics.signalingDrop.inc({ event: 'offer' });
         socket.emit('error', { message: 'Match not found' });
         return;
       }
@@ -685,28 +701,58 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         offer: data.offer,
         fromUserId: userId,
       });
+      metrics.signalingRelayed.inc({ event: 'offer' });
     });
 
     socket.on('webrtc_answer', async (data: { matchId: string; answer: any }) => {
       const match = await store().getMatch(data.matchId);
-      if (!match) return;
+      if (!match) {
+        metrics.signalingDrop.inc({ event: 'answer' });
+        return;
+      }
 
       const otherUserId = getPeerId(match, userId);
       io.to(`user_${otherUserId}`).emit('webrtc_answer', {
         answer: data.answer,
         fromUserId: userId,
       });
+      metrics.signalingRelayed.inc({ event: 'answer' });
     });
 
     socket.on('webrtc_candidate', async (data: { matchId: string; candidate: any }) => {
       const match = await store().getMatch(data.matchId);
-      if (!match) return;
+      if (!match) {
+        metrics.signalingDrop.inc({ event: 'candidate' });
+        return;
+      }
 
       const otherUserId = getPeerId(match, userId);
       io.to(`user_${otherUserId}`).emit('webrtc_candidate', {
         candidate: data.candidate,
         fromUserId: userId,
       });
+      metrics.signalingRelayed.inc({ event: 'candidate' });
+    });
+
+    // Phase 4: clients report the FINAL media outcome they actually observed
+    // (ICE result, selected transport, RTT, duration) — one small emit per
+    // call. This is how real-world connectivity success becomes measurable.
+    socket.on('call_stats', (data: any) => {
+      try {
+        if (!data || typeof data !== 'object') return;
+        const OUTCOMES = new Set(['connected', 'failed', 'disconnected', 'closed']);
+        const TRANSPORTS = new Set(['udp', 'tcp', 'relay']);
+        metrics.iceOutcome.inc({ outcome: OUTCOMES.has(data.outcome) ? data.outcome : 'other' });
+        if (data.transport !== undefined) {
+          metrics.iceTransport.inc({ transport: TRANSPORTS.has(data.transport) ? data.transport : 'other' });
+        }
+        if (typeof data.durationSec === 'number' && Number.isFinite(data.durationSec) && data.durationSec >= 0) {
+          metrics.callDuration.observe(Math.min(data.durationSec, 86_400));
+        }
+        if (typeof data.rttMs === 'number' && Number.isFinite(data.rttMs) && data.rttMs >= 0) {
+          metrics.callRtt.observe(Math.min(data.rttMs, 60_000));
+        }
+      } catch { /* metrics must never break the socket */ }
     });
 
     // ======================================
@@ -864,6 +910,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         matchId: match.id,
         startTime: Date.now(),
       });
+      metrics.matchesStarted.inc();
 
       const [callerUser, calleeUser] = await Promise.all([
         prisma.user.findUnique({ where: { id: pending.callerId }, select: peerSelect }),
@@ -918,6 +965,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     socket.on('end_direct_call', async (data: { matchId: string }) => {
       const match = await store().deleteMatch(data.matchId);
       if (!match) return;
+      metrics.endTotal.inc();
 
       const duration = Math.floor((Date.now() - match.startTime) / 1000);
 
@@ -988,8 +1036,9 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
         io.to(`user_${otherUserId}`).emit('match_message', message);
         socket.emit('match_message_sent', message);
+        metrics.matchMessages.inc();
       } catch (err) {
-        console.error('Message error:', err);
+        activeLog?.error({ err }, 'match message error');
       }
     });
 
@@ -1034,13 +1083,9 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       // `abuse_signal` record that Phase-5 moderation/trust scoring consumes.
       if (!hit(`skip:${userId}`, 8, 60_000)) {
         if (hit(`skip_sig:${userId}`, 3, 60_000)) {
-          console.warn(
-            JSON.stringify({
-              evt: 'abuse_signal',
-              kind: 'rapid_skip',
-              userId,
-              at: new Date().toISOString(),
-            }),
+          activeLog?.warn(
+            { evt: 'abuse_signal', kind: 'rapid_skip', userId },
+            'abuse signal: rapid_skip',
           );
         }
         socket.emit('error', {
@@ -1051,6 +1096,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
 
       const match = await store().deleteMatch(data.matchId);
       if (!match) return;
+      metrics.skipTotal.inc();
 
       await prisma.match.update({
         where: { id: data.matchId },
@@ -1074,6 +1120,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
     socket.on('end_match', async (data: { matchId: string }) => {
       const match = await store().deleteMatch(data.matchId);
       if (!match) return;
+      metrics.endTotal.inc();
 
       const duration = Math.floor((Date.now() - match.startTime) / 1000);
 
@@ -1176,7 +1223,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
           fromUserName: sender?.displayName || 'Someone',
         });
       } catch (err) {
-        console.error('Add friend error:', err);
+        activeLog?.error({ err }, 'add friend error');
       }
     });
 
@@ -1189,7 +1236,8 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
       // so removeSocket can never run BEFORE addSocket inserts this socket
       // id (which would leak a permanently "online" phantom entry).
       await socketsAdded.catch(() => {});
-      console.log(`Socket disconnected: ${socket.id} (user: ${userId})`);
+      activeLog?.info({ socketId: socket.id, userId }, 'socket disconnected');
+      metrics.socketsActive.dec();
 
       // Remove from waiting pool — but ONLY if THIS socket is the one that
       // queued the user (H11). Previously any secondary tab closing silently
@@ -1266,7 +1314,7 @@ export function setupSocketHandlers(io: Server, app: FastifyInstance) {
         }
       }
     } catch (err) {
-      console.error('queue sweep error:', err);
+      activeLog?.error({ err }, 'queue sweep error');
     }
   }
 

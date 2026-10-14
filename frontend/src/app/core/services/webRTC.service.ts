@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { SocketService } from './socket.service';
+import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -18,6 +19,15 @@ export class WebRTCService {
   private remoteStreamSubject = new BehaviorSubject<MediaStream | null>(null);
   private connectionStateSubject = new Subject<string>();
   private cameraErrorSubject = new Subject<string | null>();
+
+  // Phase 4: one final call-quality report per call (ICE outcome, transport,
+  // RTT, duration) sent to the backend's `call_stats` event → Prometheus.
+  private statsMatchId: string | null = null;
+  private callConnectedAt: number | null = null;
+  private statsReported = false;
+  private statsTimer: ReturnType<typeof setTimeout> | null = null;
+  // P4b: tiered media quality follows the caller's premium state.
+  private isPremium = false;
 
   // M9: TURN/STUN servers are resolved per call. The static list below is a
   // dev fallback only; in production the backend mints SHORT-LIVED HMAC
@@ -69,7 +79,11 @@ export class WebRTCService {
     }
   }
 
-  constructor(private socketService: SocketService) {
+  constructor(private socketService: SocketService, auth: AuthService) {
+    auth.user$.subscribe((u) => {
+      this.isPremium = !!u?.isPremium;
+    });
+
     this.socketService.on('webrtc_offer').subscribe(async (data: any) => {
       if (!this.peerConnection) {
         // The answerer may still be initializing getUserMedia / creating the
@@ -184,6 +198,11 @@ export class WebRTCService {
     this.currentMatchId = matchId;
     this.pendingCandidates = [];
     this.pendingOffer = null;
+    // Phase 4: fresh call = fresh stats window (and a fresh one-shot report).
+    this.statsMatchId = matchId;
+    this.callConnectedAt = null;
+    this.statsReported = false;
+    this.clearStatsTimer();
     const ice = await this.ensureIceServers();
     this.peerConnection = new RTCPeerConnection(ice);
 
@@ -194,6 +213,8 @@ export class WebRTCService {
       this.localStream.getTracks().forEach(track => {
         this.peerConnection!.addTrack(track, this.localStream!);
       });
+      // P4b: negotiate tiered resolution + cap the outgoing bitrate.
+      void this.applyVideoQuality();
     }
 
     this.peerConnection.ontrack = (event) => {
@@ -216,8 +237,28 @@ export class WebRTCService {
       }
     };
 
-    this.peerConnection.onconnectionstatechange = () => {
-      this.connectionStateSubject.next(this.peerConnection?.connectionState || 'unknown');
+    this.peerConnection.onconnectionstatechange = (event) => {
+      // Use the event's target: during teardown `this.peerConnection` may
+      // already be null while the queued 'closed' event still fires.
+      const pc = (event.target as RTCPeerConnection) || this.peerConnection;
+      const state = pc?.connectionState || 'unknown';
+      this.connectionStateSubject.next(state);
+
+      if (state === 'connected') {
+        if (!this.callConnectedAt) this.callConnectedAt = Date.now();
+        this.clearStatsTimer();
+      } else if (state === 'failed') {
+        void this.reportCallStats(pc, 'failed');
+      } else if (state === 'closed') {
+        void this.reportCallStats(pc, 'closed');
+      } else if (state === 'disconnected' && !this.statsReported) {
+        // 'disconnected' often self-heals — only count it after 5s with no
+        // recovery, otherwise transient blips would poison the success rate.
+        this.clearStatsTimer();
+        this.statsTimer = setTimeout(() => {
+          if (pc?.connectionState === 'disconnected') void this.reportCallStats(pc, 'disconnected');
+        }, 5_000);
+      }
     };
 
     // If an offer arrived before the peer connection existed, apply it now.
@@ -277,7 +318,99 @@ export class WebRTCService {
     this.localStreamSubject.next(this.localStream);
   }
 
+  // ---------------------------------------------------------------------------
+  // Phase 4: call-quality instrumentation + tiered media hardening.
+  // ---------------------------------------------------------------------------
+
+  private clearStatsTimer(): void {
+    if (this.statsTimer !== null) {
+      clearTimeout(this.statsTimer);
+      this.statsTimer = null;
+    }
+  }
+
+  /**
+   * Report the final outcome of the current call — connection result,
+   * selected transport (udp/tcp/relay), RTT of the chosen candidate pair and
+   * connected duration. One small emit per call; every step is best-effort so
+   * instrumentation can never break a call or its teardown.
+   */
+  private async reportCallStats(pc: RTCPeerConnection | null, finalState: string): Promise<void> {
+    if (this.statsReported) return;
+    // A call that closed before ever connecting isn't an ICE outcome.
+    if (finalState === 'closed' && !this.callConnectedAt) return;
+    this.statsReported = true;
+    this.clearStatsTimer();
+
+    const payload: {
+      matchId: string | null;
+      outcome: string;
+      transport?: string;
+      rttMs?: number;
+      durationSec?: number;
+    } = { matchId: this.statsMatchId, outcome: finalState };
+
+    if (this.callConnectedAt) {
+      payload.durationSec = Math.max(0, Math.round((Date.now() - this.callConnectedAt) / 1000));
+    }
+
+    try {
+      const stats = await pc?.getStats();
+      if (stats) {
+        const reports = new Map<string, any>();
+        stats.forEach((r: any) => reports.set(r.id, r));
+
+        let pair: any = null;
+        reports.forEach((r: any) => {
+          if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded')) pair = r;
+        });
+
+        if (pair) {
+          if (typeof pair.currentRoundTripTime === 'number') {
+            payload.rttMs = Math.round(pair.currentRoundTripTime * 1000);
+          }
+          const local = reports.get(pair.localCandidateId);
+          const remote = reports.get(pair.remoteCandidateId);
+          const viaRelay = local?.candidateType === 'relay' || remote?.candidateType === 'relay';
+          const proto = String(local?.protocol ?? remote?.protocol ?? '').toLowerCase();
+          payload.transport = viaRelay ? 'relay' : proto === 'tcp' ? 'tcp' : 'udp';
+        }
+      }
+    } catch { /* stats are best-effort */ }
+
+    try {
+      this.socketService.emit('call_stats', payload);
+    } catch { /* never break teardown */ }
+  }
+
+  /**
+   * P4b: negotiate outgoing video quality per tier. Free: 480p ~800 kbps;
+   * premium: 720p ~2.5 Mbps. Resolution is requested from the capture device
+   * (cheaper than downscaling locally) and the bitrate is capped on the
+   * RTCRtpSender so a slow peer can't saturate the uplink.
+   */
+  private async applyVideoQuality(): Promise<void> {
+    try {
+      const videoTrack = this.localStream?.getVideoTracks()[0];
+      if (videoTrack) {
+        await videoTrack.applyConstraints(
+          this.isPremium
+            ? { width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { width: { ideal: 640 }, height: { ideal: 480 } },
+        );
+      }
+      const sender = this.peerConnection?.getSenders().find((s) => s.track?.kind === 'video');
+      if (sender) {
+        const params = sender.getParameters();
+        if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+        params.encodings[0].maxBitrate = this.isPremium ? 2_500_000 : 800_000;
+        await sender.setParameters(params);
+      }
+    } catch { /* quality negotiation is best-effort */ }
+  }
+
   disconnect(): void {
+    this.clearStatsTimer();
     this.peerConnection?.close();
     this.peerConnection = null;
     this.currentMatchId = null;
